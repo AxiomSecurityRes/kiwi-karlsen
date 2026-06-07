@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>분석 보드 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html">로비</a>
+      <a href="/play.html">봇 대국</a>
+      <a href="/puzzles.html">퍼즐</a>
+      <a href="/analysis.html" class="active">분석</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="grid two">
+      <div class="card">
+        <div class="analysis-top">
+          <div class="evalbar" id="evalBar"><div class="evalbar-white" id="evalWhite"></div></div>
+          <div class="board-wrap" style="flex:1;"><div id="analysis-board"></div></div>
+        </div>
+        <div class="status" id="evalText">엔진 준비 중…</div>
+        <div class="center" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+          <button class="btn small secondary" id="btnFirst">⏮</button>
+          <button class="btn small secondary" id="btnPrev">◀</button>
+          <button class="btn small secondary" id="btnNext">▶</button>
+          <button class="btn small secondary" id="btnLast">⏭</button>
+          <button class="btn small" id="btnFlip">🔄 뒤집기</button>
+          <button class="btn small brown" id="btnTakeback">↩ 무르기</button>
+          <button class="btn small danger" id="btnReset">🗑 초기화</button>
+        </div>
+        <p class="muted center" id="engineMode" style="margin-top:8px;"></p>
+      </div>
+
+      <div class="card">
+        <h2>🧠 분석 & 게임 리뷰</h2>
+        <p class="muted" id="bestLine">기물을 움직이면 실시간으로 평가합니다.</p>
+
+        <div id="reviewSummary" class="hidden review-summary"></div>
+
+        <h2 style="margin-top:14px;">기보</h2>
+        <div class="movelist" id="analysisMoves"></div>
+
+        <button class="btn stack-btn" id="btnFullReview">📊 전체 분석(게임 리뷰)</button>
+        <div class="loading" id="reviewLoading">
+          <div class="kiwi-spinner"></div>
+          <p class="muted" id="reviewProgress">분석 중…</p>
+        </div>
+
+        <h2 style="margin-top:16px;">내 최근 게임</h2>
+        <div id="recentGames"><p class="muted">로그인하면 최근 게임이 표시됩니다.</p></div>
+
+        <h2 style="margin-top:16px;">PGN 불러오기</h2>
+        <textarea id="pgnInput" placeholder="PGN을 붙여넣으세요" rows="3"
+          style="width:100%;border:2px solid var(--kiwi-cream-dark);border-radius:10px;padding:8px;font-family:monospace;"></textarea>
+        <button class="btn secondary stack-btn" id="btnLoadPgn">PGN 분석</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 분석 보드 & 게임 리뷰</footer>
+
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/sounds.js"></script>
+  <script src="/js/engine.js"></script>
+  <script src="/js/tapmove.js"></script>
+  <script src="/js/analysis.js"></script>
+</body>
+</html>
