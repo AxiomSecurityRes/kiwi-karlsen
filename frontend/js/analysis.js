@@ -12,13 +12,20 @@
   let classifications = [];      // classifications[i] = 'best'|'good'|... (i번째 수에 대한)
   let reviewing = false;
 
+  // 9단계 분류 (chess.com 스타일, 한국어)
   const CLASS_INFO = {
-    best:       { ko: "최선",   color: "#2e9b53", icon: "★" },
-    good:       { ko: "좋음",   color: "#6aa329", icon: "✓" },
-    inaccuracy: { ko: "부정확", color: "#e0a526", icon: "?!" },
-    mistake:    { ko: "실수",   color: "#e07b39", icon: "?" },
-    blunder:    { ko: "대실수", color: "#c0392b", icon: "??" },
+    brilliant:  { ko: "탁월합니다", color: "#1bb7a6", icon: "!!", fx: true },
+    great:      { ko: "훌륭합니다", color: "#3aa0ff", icon: "!",  fx: true },
+    best:       { ko: "최고",       color: "#2e9b53", icon: "★" },
+    excellent:  { ko: "우수합니다", color: "#6aa329", icon: "✓" },
+    good:       { ko: "좋습니다",   color: "#9bbf5a", icon: "✓" },
+    book:       { ko: "이론",       color: "#a98b6a", icon: "📖" },
+    inaccuracy: { ko: "부정확함",   color: "#e0a526", icon: "?!" },
+    mistake:    { ko: "실수",       color: "#e07b39", icon: "?" },
+    blunder:    { ko: "블런더",     color: "#c0392b", icon: "??" },
   };
+  const BOOK_PLIES = 8;     // 첫 8수(4수씩)는 이론으로 처리
+  const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
   // ---------- 보드 ----------
   function buildBoard(fen) {
@@ -89,6 +96,7 @@
     board.position(fen);
     renderMoves();
     evalCurrent();
+    maybeCelebrate(p);
   }
 
   // ---------- 평가 표시 ----------
@@ -149,27 +157,94 @@
     const cls = classifications[i];
     const info = cls ? CLASS_INFO[cls] : null;
     const active = (i + 1 === ply) ? " mv-active" : "";
-    const badge = info ? `<sup style="color:${info.color}">${info.icon}</sup>` : "";
+    let badge = "";
+    if (info) {
+      const fxCls = info.fx ? " mv-fx" : "";
+      badge = `<sup class="mv-badge${fxCls}" style="color:${info.color}" title="${info.ko}">${info.icon}</sup>`;
+    }
     return `<span class="mv${active}" data-ply="${i + 1}" onclick="window.kiwiGoto(${i + 1})">${m.san}${badge}</span> `;
   }
   window.kiwiGoto = (p) => gotoPly(p);
 
-  // ---------- 게임 리뷰(전체 분석) ----------
-  function classify(cpLoss) {
-    if (cpLoss <= 15) return "best";
-    if (cpLoss <= 50) return "good";
-    if (cpLoss <= 120) return "inaccuracy";
-    if (cpLoss <= 250) return "mistake";
-    return "blunder";
+  // 훌륭/탁월 수로 이동하면 화면에 효과 표시
+  function maybeCelebrate(p) {
+    if (p < 1) return;
+    const cls = classifications[p - 1];
+    if (cls === "brilliant" || cls === "great") {
+      const info = CLASS_INFO[cls];
+      const fx = document.createElement("div");
+      fx.className = "celebrate";
+      fx.style.color = info.color;
+      fx.innerHTML = `<span>${info.icon}</span><b>${info.ko}</b>`;
+      document.body.appendChild(fx);
+      setTimeout(() => fx.remove(), 1400);
+      try { Sounds.play(cls === "brilliant" ? "win" : "move"); } catch (e) {}
+    }
   }
 
-  function evalToCp(ev, whitePov) {
-    // 백관점 cp로 환산(메이트는 ±10000 부근)
+  // ---------- 게임 리뷰(전체 분석) ----------
+  const MATE = 100000;
+
+  // 체스 국면을 백관점 centipawn 으로 평가 (종료국면은 정확히 처리)
+  async function evalPosition(fen) {
+    const g = new Chess(fen);
+    if (g.in_checkmate()) {
+      // 둘 차례가 외통 → 직전에 둔 쪽이 승리
+      return { cp: g.turn() === "w" ? -MATE : MATE, best: null, terminal: true };
+    }
+    if (g.in_stalemate() || g.in_draw() || g.insufficient_material()) {
+      return { cp: 0, best: null, terminal: true };
+    }
+    const ev = await Engine.evaluate(fen, 13);
     let cp;
-    if (!ev) cp = 0;
-    else if (ev.mate != null) cp = ev.mate > 0 ? 10000 - ev.mate : -10000 - ev.mate;
-    else cp = ev.score || 0;
-    return whitePov ? cp : -cp;
+    if (ev && ev.mate != null) cp = ev.mate > 0 ? MATE - ev.mate * 100 : -MATE - ev.mate * 100;
+    else cp = (ev && ev.score != null) ? ev.score : 0;
+    return { cp, best: ev && ev.best ? ev.best : null, terminal: false };
+  }
+
+  function material(fen, color) {
+    const g = new Chess(fen);
+    const b = g.board();
+    let s = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = b[r][c];
+      if (!p) continue;
+      s += (p.color === color ? 1 : -1) * (PVAL[p.type] || 0);
+    }
+    return s; // mover 관점 물량(점)
+  }
+
+  // 희생 여부: 우리 수 직후 + 상대 최선 응수 후, 우리 물량이 크게 줄었는데도 평가가 좋으면 희생
+  function isSacrifice(i, moverColor, afterMoverCp) {
+    try {
+      const before = material(fenAtPly(i), moverColor);
+      const afterOurMove = fenAtPly(i + 1);
+      const oppBest = evals[i + 1] && evals[i + 1].best;
+      let resultFen = afterOurMove;
+      if (oppBest) {
+        const g = new Chess(afterOurMove);
+        const m = g.move({ from: oppBest.slice(0, 2), to: oppBest.slice(2, 4), promotion: oppBest[4] || "q" });
+        if (m) resultFen = g.fen();
+      }
+      const after = material(resultFen, moverColor);
+      // 1.5점 이상 내주고도 평가가 나쁘지 않으면(>= -0.5) 희생
+      return (before - after) >= 1.5 && afterMoverCp >= -50;
+    } catch (e) { return false; }
+  }
+
+  function classifyMove(i, loss, isBest, moverWhite, beforeMover, afterMover, moverColor) {
+    // 이론(오프닝 북): 초반 정상 수
+    if (i < BOOK_PLIES && loss <= 110 && Math.abs(beforeMover) < 400) return "book";
+    // 탁월(브릴리언트): 최선 + 물질 희생 + 여전히 좋음
+    if (isBest && loss <= 30 && isSacrifice(i, moverColor, afterMover)) return "brilliant";
+    // 훌륭(그레이트): 최선이며 박빙 국면에서 적극적으로 평가를 끌어올린 결정적 수
+    if (isBest && loss <= 20 && Math.abs(beforeMover) <= 150 && (afterMover - beforeMover) >= 60) return "great";
+    if (isBest || loss <= 10) return "best";
+    if (loss <= 40) return "excellent";
+    if (loss <= 90) return "good";
+    if (loss <= 150) return "inaccuracy";
+    if (loss <= 300) return "mistake";
+    return "blunder";
   }
 
   async function fullReview() {
@@ -178,23 +253,24 @@
     $("reviewLoading").classList.add("show");
     $("btnFullReview").disabled = true;
 
-    // 0..N 까지 각 국면 평가 (백관점)
+    // 0..N 까지 각 국면 평가 (백관점, 종료국면 정확 처리)
     evals = new Array(mainline.length + 1).fill(null);
     for (let i = 0; i <= mainline.length; i++) {
       $("reviewProgress").textContent = `분석 중… (${i}/${mainline.length})`;
-      const fen = fenAtPly(i);
-      evals[i] = await Engine.evaluate(fen, 12);
+      evals[i] = await evalPosition(fenAtPly(i));
     }
 
-    // 각 수 분류: i번째 수(0-indexed)를 둔 사람 관점의 손실
     classifications = new Array(mainline.length).fill(null);
     const counts = { white: {}, black: {} };
     for (let i = 0; i < mainline.length; i++) {
-      const moverWhite = (i % 2 === 0); // 0=백의 1수
-      const before = evalToCp(evals[i], moverWhite);   // 두기 전, 둘 사람 관점 최선값
-      const after = evalToCp(evals[i + 1], moverWhite); // 둔 후(상대 차례) 같은 관점
-      const loss = Math.max(0, before - after);
-      const cls = classify(loss);
+      const moverWhite = (i % 2 === 0);
+      const moverColor = moverWhite ? "w" : "b";
+      const beforeMover = moverWhite ? evals[i].cp : -evals[i].cp;       // 두기 전(최선 가정)
+      const afterMover = moverWhite ? evals[i + 1].cp : -evals[i + 1].cp; // 둔 후 실제
+      const loss = Math.max(0, beforeMover - afterMover);
+      const bestUci = evals[i].best;
+      const isBest = bestUci && mainline[i].uci.slice(0, 4) === bestUci.slice(0, 4);
+      const cls = classifyMove(i, loss, isBest, moverWhite, beforeMover, afterMover, moverColor);
       classifications[i] = cls;
       const side = moverWhite ? "white" : "black";
       counts[side][cls] = (counts[side][cls] || 0) + 1;
@@ -204,17 +280,18 @@
     $("btnFullReview").disabled = false;
     renderSummary(counts);
     renderMoves();
+    reviewing = false;
   }
 
   function renderSummary(counts) {
-    const order = ["best", "good", "inaccuracy", "mistake", "blunder"];
+    const order = ["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder"];
     function row(side, label) {
-      let cells = order.map((k) => {
+      let cells = order.filter((k) => counts[side][k]).map((k) => {
         const info = CLASS_INFO[k];
-        const n = counts[side][k] || 0;
-        return `<span style="color:${info.color};font-weight:700;">${info.icon} ${n}</span>`;
+        return `<span style="color:${info.color};font-weight:700;">${info.icon} ${info.ko} ${counts[side][k]}</span>`;
       }).join(" · ");
-      return `<div class="sum-row"><b>${label}</b> ${cells}</div>`;
+      if (!cells) cells = '<span class="muted">기록 없음</span>';
+      return `<div class="sum-row"><b>${label}</b><br>${cells}</div>`;
     }
     $("reviewSummary").innerHTML =
       `<div class="sum-title">📊 게임 리뷰 결과</div>` +

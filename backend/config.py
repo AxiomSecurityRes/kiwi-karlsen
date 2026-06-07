@@ -5,7 +5,7 @@ class Settings:
     """애플리케이션 전역 설정."""
 
     APP_NAME: str = "Kiwi Karlsen.com"
-    VERSION: str = "v5"
+    VERSION: str = "v6"
     SECRET: str = os.environ.get("KIWI_SECRET", "kiwi-dev-secret-change-me")
 
     # SQLite 기본. 운영 시 Postgres 권장 (Render 무료 플랜은 파일시스템이 휘발성).
