@@ -116,7 +116,8 @@
       draggable: !TapMove.isTouch(),
       position: "start",
       orientation: myColor,
-      pieceTheme: window.kiwiPieceTheme,
+      // window.kiwiPieceTheme가 정의되지 않았을 경우를 위한 대체(Fallback) 경로 추가
+      pieceTheme: window.kiwiPieceTheme || '/assets/img/chesspieces/wikipedia/{piece}.png',
       onDragStart,
       onDrop,
       onSnapEnd,
