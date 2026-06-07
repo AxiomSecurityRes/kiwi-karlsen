@@ -3,6 +3,7 @@
   const $ = (id) => document.getElementById(id);
 
   let board = null;
+  let tapHandle = null;
   let game = null;
   let myColor = "white";
   let gameId = null;
@@ -97,12 +98,21 @@
   }
 
   function onDrop(source, target) {
+    const ok = attemptUserMove(source, target);
+    return ok ? undefined : "snapback";
+  }
+
+  function attemptUserMove(source, target) {
+    if (gameOver || !myTurn) return false;
     const move = game.move({ from: source, to: target, promotion: "q" });
-    if (move === null) { Sounds.play("illegal"); return "snapback"; }
+    if (move === null) { Sounds.play("illegal"); return false; }
+    if (tapHandle) tapHandle.clear();
     const uci = source + target + (move.promotion ? move.promotion : "");
     Socket.send({ type: "move", gameId, uci });
+    board.position(game.fen());
     Sounds.playForMove(move, game.in_check());
     afterAnyMove();
+    return true;
   }
 
   function onSnapEnd() { board.position(game.fen()); }
@@ -133,9 +143,16 @@
 
     if (board) board.destroy();
     board = Chessboard("board", {
-      draggable: true, position: msg.fen, orientation: myColor,
-      pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      draggable: !TapMove.isTouch(), position: msg.fen, orientation: myColor,
+      pieceTheme: window.kiwiPieceTheme,
       onDragStart, onDrop, onSnapEnd,
+    });
+    tapHandle = TapMove.attach({
+      boardId: "board",
+      getGame: () => game,
+      canMove: () => !gameOver && myTurn,
+      getMoverColor: () => myColor[0],
+      doMove: (from, to) => { attemptUserMove(from, to); },
     });
 
     myTurn = game.turn() === myColor[0];
@@ -156,6 +173,7 @@
 
   // ---- 상대 수 / 확인 ----
   Socket.on("opponent_move", (msg) => {
+    if (tapHandle) tapHandle.clear();
     const move = game.move({
       from: msg.uci.slice(0, 2), to: msg.uci.slice(2, 4),
       promotion: msg.uci.length > 4 ? msg.uci[4] : "q",
@@ -280,6 +298,10 @@
   }
   $("resultOk").addEventListener("click", backToLobby);
   $("backToLobbyBtn").addEventListener("click", backToLobby);
+  $("resultReview").addEventListener("click", () => {
+    try { if (game) localStorage.setItem("kiwi_review_pgn", game.pgn()); } catch (e) {}
+    location.href = "/analysis.html";
+  });
 
   // ---- 소켓 이벤트 ----
   Socket.on("game_start", startGame);

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kiwi Karlsen.com — 온라인 체스</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
-  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -16,6 +16,7 @@
       <a href="/index.html" class="active">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html">퍼즐</a>
+      <a href="/analysis.html">분석</a>
       <span id="userChip" class="user-chip hidden"></span>
       <a href="#" id="logoutBtn" class="hidden">로그아웃</a>
     </nav>
@@ -24,13 +25,17 @@
   <main class="container">
     <!-- 로그인 화면 -->
     <section id="loginView" class="card" style="max-width:420px;margin:40px auto;">
-      <h2>🥝 환영합니다!</h2>
-      <p class="muted">키위 카를센에 오신 것을 환영합니다. 이름으로 입장하세요. (비밀번호는 선택)</p>
+      <h2 id="authTitle">🥝 로그인</h2>
+      <p class="muted" id="authSubtitle">키위 카를센에 오신 것을 환영합니다.</p>
       <label>사용자 이름</label>
-      <input type="text" id="loginUsername" placeholder="예: KiwiMagnus" maxlength="40" />
-      <label>비밀번호 (선택)</label>
-      <input type="password" id="loginPassword" placeholder="(선택) 계정 보호용" maxlength="128" />
-      <button class="btn" id="loginBtn" style="width:100%;margin-top:8px;">입장하기</button>
+      <input type="text" id="loginUsername" placeholder="2~20자, 영문/숫자/_-." maxlength="20" autocomplete="username" />
+      <label>비밀번호</label>
+      <input type="password" id="loginPassword" placeholder="6자 이상" maxlength="128" autocomplete="current-password" />
+      <button class="btn" id="loginBtn" style="width:100%;margin-top:8px;">로그인</button>
+      <p class="center muted" style="margin-top:12px;">
+        <span id="authSwitchText">계정이 없으신가요?</span>
+        <a href="#" id="authSwitch" style="font-weight:700;">회원가입</a>
+      </p>
       <p id="loginError" class="muted" style="color:var(--danger);min-height:18px;"></p>
     </section>
 
@@ -59,7 +64,21 @@
           <div id="playerList"><p class="muted">불러오는 중…</p></div>
         </div>
         <div class="card">
-          <h2>🏆 리더보드</h2>
+          <h2>👥 친구</h2>
+          <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <input type="text" id="friendSearch" placeholder="사용자 이름으로 추가" maxlength="20" style="margin:0;" />
+            <button class="btn small" id="friendAddBtn">추가</button>
+          </div>
+          <div id="friendReqs"></div>
+          <div id="friendList"><p class="muted">로그인 후 친구를 추가하세요.</p></div>
+        </div>
+        <div class="card">
+          <h2>🔥 내 스트릭</h2>
+          <div id="streakPanel" class="streak-panel">
+            <div class="streak-num"><span id="streakCurrent">0</span><small>일 연속</small></div>
+            <div class="streak-best">최고 기록: <b id="streakBest">0</b>일</div>
+          </div>
+          <h2 style="margin-top:18px;">🏆 리더보드</h2>
           <div id="leaderboard"><p class="muted">불러오는 중…</p></div>
           <h2 style="margin-top:18px;">바로가기</h2>
           <a class="btn brown stack-btn" href="/play.html">🤖 봇과 대국</a>
@@ -118,24 +137,42 @@
       <h2 id="resultTitle">결과</h2>
       <p id="resultText" class="muted"></p>
       <p id="resultRating" style="font-weight:800;color:var(--kiwi-green-dark);"></p>
-      <button class="btn" id="resultOk">로비로 돌아가기</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn brown" id="resultReview">📊 게임 리뷰</button>
+        <button class="btn" id="resultOk">로비로 돌아가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 친구 DM 채팅 패널 -->
+  <div class="dm-panel" id="dmPanel">
+    <div class="dm-head">
+      <span id="dmTitle">친구</span>
+      <span class="close" id="dmClose">✕</span>
+    </div>
+    <div class="dm-body" id="dmBody"></div>
+    <div class="dm-foot">
+      <input type="text" id="dmInput" placeholder="메시지…" maxlength="1000" />
+      <button class="btn small" id="dmSend">전송</button>
     </div>
   </div>
 
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스 · v5</footer>
 
   <!-- 라이브러리 -->
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
   <!-- 앱 스크립트 -->
   <script src="/js/api.js"></script>
   <script src="/js/sounds.js"></script>
   <script src="/js/socket.js"></script>
+  <script src="/js/tapmove.js"></script>
   <script src="/js/online-game.js"></script>
   <script src="/js/lobby.js"></script>
+  <script src="/js/friends-ui.js"></script>
 </body>
 </html>

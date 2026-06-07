@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>봇 대국 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
-  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -16,6 +16,7 @@
       <a href="/index.html">로비</a>
       <a href="/play.html" class="active">봇 대국</a>
       <a href="/puzzles.html">퍼즐</a>
+      <a href="/analysis.html">분석</a>
     </nav>
   </header>
 
@@ -81,19 +82,23 @@
       <div class="big" id="botResultEmoji">🥝</div>
       <h2 id="botResultTitle">결과</h2>
       <p id="botResultText" class="muted"></p>
-      <button class="btn" id="botResultOk">새 대국</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn brown" id="botResultReview">📊 게임 리뷰</button>
+        <button class="btn" id="botResultOk">새 대국</button>
+      </div>
     </div>
   </div>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 봇과의 대국은 레이팅에 반영되지 않습니다.</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 봇과의 대국은 레이팅에 반영되지 않습니다. · v5</footer>
 
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
   <script src="/js/api.js"></script>
   <script src="/js/sounds.js"></script>
   <script src="/js/engine.js"></script>
+  <script src="/js/tapmove.js"></script>
   <script src="/js/bot-game.js"></script>
 </body>
 </html>

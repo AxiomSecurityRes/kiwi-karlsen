@@ -116,7 +116,7 @@
   }
 
   // ---------- 실시간 수신 (WebSocket) ----------
-  if (window.Socket) {
+  if (typeof Socket !== "undefined") {
     Socket.on("dm", (msg) => {
       const me = API.getUser();
       // 현재 열린 상대의 메시지면 패널에 추가, 아니면 토스트 알림

@@ -33,9 +33,9 @@ const TapMove = (() => {
       selected = from;
     }
 
-    function onTap(e) {
+    function handleTapAt(target) {
       if (!opts.canMove()) { clear(); return; }
-      const cell = e.target.closest("[data-square]");
+      const cell = target && target.closest ? target.closest("[data-square]") : null;
       if (!cell) return;
       const sq = cell.getAttribute("data-square");
       const g = opts.getGame();
@@ -59,7 +59,21 @@ const TapMove = (() => {
       }
     }
 
-    boardEl.addEventListener("click", onTap);
+    const touch = isTouch();
+    if (touch) {
+      // 터치 기기: touchend 로 직접 처리(스크롤/합성클릭 의존 제거)
+      boardEl.addEventListener("touchend", (e) => {
+        const t = e.changedTouches && e.changedTouches[0];
+        if (!t) return;
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.closest && el.closest("#" + opts.boardId)) {
+          e.preventDefault();
+          handleTapAt(el);
+        }
+      }, { passive: false });
+    } else {
+      boardEl.addEventListener("click", (e) => handleTapAt(e.target));
+    }
     return { clear };
   }
 

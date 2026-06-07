@@ -316,7 +316,18 @@
     const ok = await Engine.init();
     $("engineMode").textContent = "엔진: " + Engine.describe();
     $("evalText").textContent = "기물을 움직여 분석을 시작하세요.";
-    evalCurrent();
+    // 게임 종료 후 '게임 리뷰' 버튼으로 넘어온 경우 저장된 PGN 자동 로드
+    let stored = null;
+    try { stored = localStorage.getItem("kiwi_review_pgn"); } catch (e) {}
+    if (stored) {
+      try { localStorage.removeItem("kiwi_review_pgn"); } catch (e) {}
+      if (loadFromPgn(stored)) {
+        $("bestLine").textContent = "방금 둔 게임을 불러왔습니다. 자동 분석을 시작합니다…";
+        fullReview();
+      }
+    } else {
+      evalCurrent();
+    }
     loadRecentGames();
   })();
 })();

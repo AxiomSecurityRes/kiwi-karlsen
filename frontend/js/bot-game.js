@@ -13,6 +13,7 @@
   let timeLimit = 0;
   let clocks = { me: 0, bot: 0 };
   let clockTimer = null;
+  let tapHandle = null;
 
   function fmtClock(sec) {
     if (timeLimit === 0) return "∞";
@@ -112,13 +113,20 @@
 
     if (board) board.destroy();
     board = Chessboard("bot-board", {
-      draggable: true,
+      draggable: !TapMove.isTouch(),
       position: "start",
       orientation: myColor,
-      pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      pieceTheme: window.kiwiPieceTheme,
       onDragStart,
       onDrop,
       onSnapEnd,
+    });
+    tapHandle = TapMove.attach({
+      boardId: "bot-board",
+      getGame: () => game,
+      canMove: () => !gameOver && game && game.turn() === myColor[0],
+      getMoverColor: () => myColor[0],
+      doMove: (from, to) => { attemptUserMove(from, to); },
     });
 
     Sounds.play("gameStart");
@@ -142,13 +150,23 @@
   }
 
   function onDrop(source, target) {
+    const ok = attemptUserMove(source, target);
+    return ok ? undefined : "snapback";
+  }
+
+  function attemptUserMove(source, target) {
+    if (gameOver) return false;
     const move = game.move({ from: source, to: target, promotion: "q" });
-    if (move === null) { Sounds.play("illegal"); return "snapback"; }
+    if (move === null) { Sounds.play("illegal"); return false; }
+    if (tapHandle) tapHandle.clear();
+    board.position(game.fen());
     Sounds.playForMove(move, game.in_check());
     renderMoves();
     updateStatus();
-    if (checkGameOver()) return;
+    renderBotClocks();
+    if (checkGameOver()) return true;
     setTimeout(botMove, 350);
+    return true;
   }
 
   function onSnapEnd() { board.position(game.fen()); }
@@ -190,6 +208,7 @@
     Sounds.playForMove(move, game.in_check());
     renderMoves();
     updateStatus();
+    renderBotClocks();
     checkGameOver();
   }
 
@@ -258,6 +277,10 @@
   }
   $("botNewBtn").addEventListener("click", newGame);
   $("botResultOk").addEventListener("click", newGame);
+  $("botResultReview").addEventListener("click", () => {
+    try { if (game) localStorage.setItem("kiwi_review_pgn", game.pgn()); } catch (e) {}
+    location.href = "/analysis.html";
+  });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
