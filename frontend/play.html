@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>봇 대국 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html">로비</a>
+      <a href="/play.html" class="active">봇 대국</a>
+      <a href="/puzzles.html">퍼즐</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- 봇 선택 -->
+    <section id="selectView" class="card">
+      <h2>🤖 상대할 키위 봇을 선택하세요</h2>
+      <p class="muted">난이도는 입문(Kiwi Baby)부터 최고난도(Kiwi Grandmaster)까지 8단계입니다.</p>
+      <div id="botGrid" class="bot-grid"></div>
+      <div style="margin-top:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <label style="margin:0;">내 색상:</label>
+        <select id="colorSelect" style="width:auto;margin:0;">
+          <option value="white">백 (선공)</option>
+          <option value="black">흑 (후공)</option>
+          <option value="random">무작위</option>
+        </select>
+        <label style="margin:0;">⏱ 시간:</label>
+        <select id="botTimeSelect" style="width:auto;margin:0;">
+          <option value="0">제한 없음</option>
+          <option value="3">3분</option>
+          <option value="5">5분</option>
+          <option value="10" selected>10분</option>
+          <option value="30">30분</option>
+        </select>
+        <button class="btn" id="startBotBtn" disabled>대국 시작</button>
+      </div>
+      <p id="engineNote" class="muted" style="margin-top:10px;"></p>
+    </section>
+
+    <!-- 봇 대국 -->
+    <section id="botGameView" class="hidden">
+      <div class="grid two">
+        <div class="card">
+          <div class="gameinfo">
+            <span class="who" id="botLabel">키위 봇</span>
+            <span class="clock" id="botClock">10:00</span>
+          </div>
+          <div class="board-wrap"><div id="bot-board"></div></div>
+          <div class="gameinfo" style="margin-top:10px;">
+            <span class="who">🥝 나</span>
+            <span class="clock active" id="myBotClock">10:00</span>
+          </div>
+          <div class="status" id="botStatus">당신의 차례입니다.</div>
+          <div class="center">
+            <button class="btn danger small" id="botResignBtn">기권</button>
+            <button class="btn secondary small" id="botNewBtn">새 대국</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>기보</h2>
+          <div class="movelist" id="botMoveList"></div>
+          <div class="loading" id="botThinking">
+            <div class="kiwi-spinner"></div>
+            <p class="muted">키위가 고민 중…</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-bg" id="botResultModal">
+    <div class="modal">
+      <div class="big" id="botResultEmoji">🥝</div>
+      <h2 id="botResultTitle">결과</h2>
+      <p id="botResultText" class="muted"></p>
+      <button class="btn" id="botResultOk">새 대국</button>
+    </div>
+  </div>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 봇과의 대국은 레이팅에 반영되지 않습니다.</footer>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chess.js@0.13.4/chess.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/sounds.js"></script>
+  <script src="/js/engine.js"></script>
+  <script src="/js/bot-game.js"></script>
+</body>
+</html>

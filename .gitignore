@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.sqlite3
+*.db
+.env
+.venv/
+venv/
+node_modules/
+.DS_Store
+frontend/assets/engine/stockfish.js
+frontend/assets/engine/*.wasm

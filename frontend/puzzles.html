@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>퍼즐 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html">로비</a>
+      <a href="/play.html">봇 대국</a>
+      <a href="/puzzles.html" class="active">퍼즐</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="grid two">
+      <div class="card">
+        <div class="board-wrap"><div id="puzzle-board"></div></div>
+        <div class="status" id="puzzleStatus">불러오는 중…</div>
+      </div>
+      <div class="card">
+        <h2>🧩 퍼즐 트레이너</h2>
+        <p class="muted">Lichess 오픈 데이터베이스 형식의 퍼즐입니다. 최선의 수를 찾아보세요!</p>
+        <p><b>퍼즐 ID:</b> <span id="puzzleId">-</span></p>
+        <p><b>레이팅:</b> <span id="puzzleRating">-</span></p>
+        <p><b>테마:</b> <span id="puzzleThemes">-</span></p>
+        <p><b>둘 차례:</b> <span id="puzzleTurn">-</span></p>
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" id="nextBtn">다음 퍼즐 ➡️</button>
+          <button class="btn secondary" id="hintBtn">힌트 💡</button>
+          <button class="btn brown" id="retryBtn">다시 풀기 🔁</button>
+          <button class="btn secondary" id="solutionBtn">정답 보기 👁️</button>
+        </div>
+        <div style="margin-top:14px;">
+          <label>난이도 범위</label>
+          <select id="diffSelect" style="width:auto;">
+            <option value="0-4000">전체</option>
+            <option value="0-1000">쉬움 (~1000)</option>
+            <option value="1000-1600">보통 (1000~1600)</option>
+            <option value="1600-2200">어려움 (1600~2200)</option>
+            <option value="2200-4000">매우 어려움 (2200+)</option>
+          </select>
+        </div>
+        <div style="margin-top:14px;">
+          <p><b>이번 세션 기록:</b> <span id="solvedCount">0</span> 성공 / <span id="failCount">0</span> 실패</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요!</footer>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chess.js@0.13.4/chess.js"></script>
+  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/sounds.js"></script>
+  <script src="/js/puzzles.js"></script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+/* ===== Kiwi Karlsen.com — 키위새 테마 ===== */
+:root {
+  --kiwi-green: #6aa329;
+  --kiwi-green-dark: #4d7d1c;
+  --kiwi-green-light: #8fbf4d;
+  --kiwi-brown: #7a5230;
+  --kiwi-brown-light: #9a6a40;
+  --kiwi-cream: #f6f3e7;
+  --kiwi-cream-dark: #e9e3cf;
+  --board-light: #eef0cd;   /* 연한 키위 과육색 */
+  --board-dark: #6aa329;    /* 키위 껍질색 */
+  --text: #2c2c22;
+  --muted: #6f6f5e;
+  --danger: #c0392b;
+  --gold: #e0a526;
+  --radius: 14px;
+  --shadow: 0 8px 24px rgba(77, 125, 28, 0.18);
+  --font: "Segoe UI", "Pretendard", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(143, 191, 77, 0.20), transparent 40%),
+    radial-gradient(circle at 88% 86%, rgba(122, 82, 48, 0.12), transparent 45%),
+    var(--kiwi-cream);
+  min-height: 100vh;
+}
+
+a { color: var(--kiwi-green-dark); }
+
+/* ----- 헤더 ----- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 22px;
+  background: linear-gradient(120deg, var(--kiwi-green-dark), var(--kiwi-green));
+  color: #fff;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar img { width: 40px; height: 40px; }
+.topbar .brand {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+.topbar .brand small { font-weight: 500; opacity: 0.85; }
+.topbar nav { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.topbar nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.topbar nav a:hover, .topbar nav a.active { background: rgba(255, 255, 255, 0.2); }
+.user-chip {
+  background: rgba(255, 255, 255, 0.22);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* ----- 레이아웃 ----- */
+.container { max-width: 1100px; margin: 28px auto; padding: 0 18px; }
+.grid { display: grid; gap: 22px; }
+.grid.two { grid-template-columns: 1.2fr 0.8fr; }
+@media (max-width: 880px) { .grid.two { grid-template-columns: 1fr; } }
+
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  border: 2px solid var(--kiwi-cream-dark);
+}
+.card h2 { margin: 0 0 14px; color: var(--kiwi-green-dark); font-size: 1.15rem; }
+
+/* ----- 버튼 ----- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(120deg, var(--kiwi-green), var(--kiwi-green-light));
+  color: #fff;
+  border: none;
+  padding: 11px 18px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.98rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(77, 125, 28, 0.3);
+  transition: transform 0.1s, filter 0.15s;
+  text-decoration: none;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.secondary {
+  background: #fff; color: var(--kiwi-green-dark);
+  border: 2px solid var(--kiwi-green); box-shadow: none;
+}
+.btn.brown { background: linear-gradient(120deg, var(--kiwi-brown), var(--kiwi-brown-light)); }
+.btn.danger { background: linear-gradient(120deg, #c0392b, #e05a4a); }
+.btn.small { padding: 6px 12px; font-size: 0.85rem; }
+
+/* 바로가기 버튼은 블록 표시 */
+.stack-btn { display: flex; margin-top: 8px; }
+
+/* ----- 폼 ----- */
+input[type="text"], input[type="password"], select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 2px solid var(--kiwi-cream-dark);
+  border-radius: 10px;
+  font-size: 1rem;
+  margin-bottom: 12px;
+  background: var(--kiwi-cream);
+}
+input:focus, select:focus { outline: none; border-color: var(--kiwi-green); }
+label { font-weight: 600; font-size: 0.9rem; color: var(--muted); }
+
+/* ----- 보드 ----- */
+.board-wrap { max-width: 480px; margin: 0 auto; }
+#board, #bot-board, #puzzle-board { width: 100%; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+/* chessboard.js 색상 오버라이드 */
+.white-1e1d7 { background-color: var(--board-light) !important; color: var(--board-dark) !important; }
+.black-3c85d { background-color: var(--board-dark) !important; color: var(--board-light) !important; }
+.highlight-square { box-shadow: inset 0 0 0 4px rgba(224, 165, 38, 0.75); }
+
+/* ----- 플레이어 목록 ----- */
+.player-row, .lb-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px; margin-bottom: 8px;
+  background: var(--kiwi-cream);
+}
+.player-row .name { font-weight: 700; }
+.player-row .rating { color: var(--muted); margin-left: auto; font-weight: 600; }
+.player-row .ingame { color: var(--danger); font-size: 0.8rem; font-weight: 700; }
+.lb-rank { width: 28px; font-weight: 800; color: var(--gold); text-align: center; }
+.lb-row .name { font-weight: 700; }
+.lb-row .rating { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+
+/* ----- 봇 카드 ----- */
+.bot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.bot-card {
+  border: 2px solid var(--kiwi-cream-dark);
+  border-radius: var(--radius); padding: 16px; cursor: pointer;
+  background: #fff; transition: transform 0.12s, border-color 0.15s;
+}
+.bot-card:hover { transform: translateY(-3px); border-color: var(--kiwi-green); }
+.bot-card.selected { border-color: var(--kiwi-green); box-shadow: var(--shadow); }
+.bot-card .avatar { font-size: 2.2rem; }
+.bot-card .bname { font-weight: 800; margin: 6px 0 2px; color: var(--kiwi-green-dark); }
+.bot-card .brating { color: var(--gold); font-weight: 700; font-size: 0.9rem; }
+.bot-card .bblurb { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+
+/* ----- 토스트 / 모달 ----- */
+.toast-wrap { position: fixed; right: 18px; bottom: 18px; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+.toast {
+  background: #fff; border-left: 6px solid var(--kiwi-green);
+  border-radius: 10px; padding: 14px 18px; box-shadow: var(--shadow);
+  min-width: 240px; animation: slidein 0.25s ease;
+}
+.toast.challenge { border-left-color: var(--gold); }
+.toast .t-actions { margin-top: 10px; display: flex; gap: 8px; }
+@keyframes slidein { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(44, 44, 34, 0.5);
+  display: none; align-items: center; justify-content: center; z-index: 120;
+}
+.modal-bg.show { display: flex; }
+.modal {
+  background: #fff; border-radius: var(--radius); padding: 28px;
+  text-align: center; max-width: 360px; box-shadow: var(--shadow);
+}
+.modal h2 { margin-top: 0; }
+.modal .big { font-size: 3rem; }
+
+/* ----- 게임 정보 / 상태 ----- */
+.gameinfo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.gameinfo .who { font-weight: 800; }
+.clock { font-variant-numeric: tabular-nums; font-weight: 800; background: var(--kiwi-cream); padding: 6px 14px; border-radius: 10px; }
+.clock.active { background: var(--kiwi-green); color: #fff; }
+.status { text-align: center; font-weight: 700; color: var(--kiwi-green-dark); min-height: 24px; margin: 8px 0; }
+.movelist { font-family: monospace; font-size: 0.9rem; max-height: 160px; overflow-y: auto; background: var(--kiwi-cream); border-radius: 10px; padding: 10px; }
+
+/* ----- 로딩 (키위 테마) ----- */
+.loading {
+  display: none; text-align: center; padding: 40px 0;
+}
+.loading.show { display: block; }
+.kiwi-spinner {
+  width: 56px; height: 56px; margin: 0 auto 12px;
+  border: 6px solid var(--kiwi-cream-dark);
+  border-top-color: var(--kiwi-green);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+.center { text-align: center; }
+.muted { color: var(--muted); }
+.footer { text-align: center; color: var(--muted); padding: 26px; font-size: 0.85rem; }
+
+/* ----- 채팅 ----- */
+.chatbox {
+  height: 160px; overflow-y: auto; background: var(--kiwi-cream);
+  border-radius: 10px; padding: 10px; font-size: 0.9rem;
+}
+.chatbox .msg { margin-bottom: 6px; line-height: 1.35; }
+.chatbox .msg .who { font-weight: 700; color: var(--kiwi-green-dark); }
+.chatbox .msg.me .who { color: var(--kiwi-brown); }
+.chatbox .sys { color: var(--muted); font-style: italic; }

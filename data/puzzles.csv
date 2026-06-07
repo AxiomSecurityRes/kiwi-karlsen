@@ -1,0 +1,6 @@
+PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
+kiwi0001,7k/5ppp/8/8/8/8/5PPP/4R1K1 b - - 0 1,h8g8 e1e8,750,80,95,100,mateIn1 backRankMate,,
+kiwi0002,7k/5ppp/8/8/8/8/5PPP/3Q2K1 b - - 0 1,h8g8 d1d8,800,80,94,100,mateIn1 backRankMate,,
+kiwi0003,6k1/5ppp/8/8/8/8/5PPP/2R3K1 b - - 0 1,g8h8 c1c8,820,80,93,100,mateIn1 backRankMate,,
+kiwi0004,6k1/5ppp/8/8/8/8/5PPP/Q5K1 b - - 0 1,g8h8 a1a8,700,80,92,100,mateIn1 backRankMate,,
+kiwi0005,7k/5ppp/8/8/8/8/5PPP/R5K1 b - - 0 1,h8g8 a1a8,730,80,91,100,mateIn1 backRankMate,,
