@@ -7,5 +7,3 @@ __pycache__/
 venv/
 node_modules/
 .DS_Store
-frontend/assets/engine/stockfish.js
-frontend/assets/engine/*.wasm
