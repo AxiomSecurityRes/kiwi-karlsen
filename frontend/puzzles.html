@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>퍼즐 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
-  <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -16,6 +16,7 @@
       <a href="/index.html">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html" class="active">퍼즐</a>
+      <a href="/analysis.html">분석</a>
     </nav>
   </header>
 
@@ -48,6 +49,12 @@
             <option value="2200-4000">매우 어려움 (2200+)</option>
           </select>
         </div>
+        <div style="margin-top:10px;">
+          <label>유형(테마)</label>
+          <select id="themeSelect" style="width:auto;">
+            <option value="">전체 유형</option>
+          </select>
+        </div>
         <div style="margin-top:14px;">
           <p><b>이번 세션 기록:</b> <span id="solvedCount">0</span> 성공 / <span id="failCount">0</span> 실패</p>
         </div>
@@ -55,14 +62,15 @@
     </div>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요!</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요! · v5</footer>
 
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
   <script src="/js/api.js"></script>
   <script src="/js/sounds.js"></script>
+  <script src="/js/tapmove.js"></script>
   <script src="/js/puzzles.js"></script>
 </body>
 </html>

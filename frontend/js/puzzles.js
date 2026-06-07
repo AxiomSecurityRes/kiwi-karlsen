@@ -3,6 +3,7 @@
   const $ = (id) => document.getElementById(id);
 
   let board = null;
+  let tapHandle = null;
   let game = null;
   let puzzle = null;        // {id, fen, moves[], rating, themes}
   let solverColor = "w";    // 풀이자 색 (첫 수 자동재생 후 둘 차례)
@@ -22,13 +23,28 @@
   async function loadPuzzle() {
     setStatus("불러오는 중…");
     const [min, max] = $("diffSelect").value.split("-").map(Number);
+    const theme = $("themeSelect").value;
     try {
-      puzzle = await API.randomPuzzle(min, max);
+      puzzle = await API.randomPuzzle(min, max, theme);
     } catch (e) {
-      setStatus("퍼즐을 불러오지 못했습니다.", "var(--danger)");
+      setStatus("조건에 맞는 퍼즐이 없습니다. 유형/난이도를 바꿔보세요.", "var(--danger)");
       return;
     }
     setupPuzzle();
+  }
+
+  async function loadThemes() {
+    try {
+      const { themes, total } = await API.puzzleThemes();
+      const sel = $("themeSelect");
+      themes.forEach((t) => {
+        const opt = document.createElement("option");
+        opt.value = t.code;
+        opt.textContent = `${t.label} (${t.count})`;
+        sel.appendChild(opt);
+      });
+      if (total) setStatus(`총 ${total.toLocaleString()}개 퍼즐 로드됨.`);
+    } catch (e) { /* noop */ }
   }
 
   function setupPuzzle() {
@@ -51,13 +67,21 @@
 
     if (board) board.destroy();
     board = Chessboard("puzzle-board", {
-      draggable: true,
+      draggable: !TapMove.isTouch(),
       position: puzzle.fen,
       orientation: solverColor === "w" ? "white" : "black",
-      pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+      pieceTheme: window.kiwiPieceTheme,
       onDragStart,
       onDrop,
       onSnapEnd,
+    });
+    if (tapHandle) tapHandle.clear();
+    tapHandle = TapMove.attach({
+      boardId: "puzzle-board",
+      getGame: () => game,
+      canMove: () => !solved && !shown && game && game.turn() === solverColor,
+      getMoverColor: () => solverColor,
+      doMove: (from, to) => { onDrop(from, to); board.position(game.fen()); },
     });
 
     setStatus("상대가 수를 두는 중…");
@@ -131,6 +155,7 @@
       applyUci(puzzle.moves[solutionIndex]);
       solutionIndex++;
       board.position(game.fen());
+      if (tapHandle) tapHandle.clear();
       if (solutionIndex >= puzzle.moves.length) {
         finishSolved();
       } else {
@@ -187,6 +212,8 @@
   $("hintBtn").addEventListener("click", showHint);
   $("solutionBtn").addEventListener("click", showSolution);
   $("diffSelect").addEventListener("change", loadPuzzle);
+  $("themeSelect").addEventListener("change", loadPuzzle);
 
+  loadThemes();
   loadPuzzle();
 })();

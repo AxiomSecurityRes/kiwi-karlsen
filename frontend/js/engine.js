@@ -7,6 +7,8 @@ const Engine = (() => {
   let ready = false;
   let initTried = false;
   let pendingResolve = null;
+  let pendingEval = null;
+  let lastEval = { score: null, mate: null, best: null };
   let mode = "내장 JS 엔진";
 
   function init() {
@@ -46,9 +48,23 @@ const Engine = (() => {
           mode = "브라우저 Stockfish (WASM)";
           clearTimeout(timeout);
           resolve(true);
+        } else if (line.startsWith("info") && line.indexOf("score") !== -1 && pendingEval) {
+          // 평가 정보 누적 (마지막 깊이의 값을 사용)
+          const cpM = line.match(/score cp (-?\d+)/);
+          const mateM = line.match(/score mate (-?\d+)/);
+          const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          if (cpM) { lastEval.score = parseInt(cpM[1], 10); lastEval.mate = null; }
+          if (mateM) { lastEval.mate = parseInt(mateM[1], 10); lastEval.score = null; }
+          if (pvM) { lastEval.best = pvM[1]; }
         } else if (line.startsWith("bestmove")) {
           const mv = line.split(" ")[1];
-          if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(mv); }
+          if (pendingEval) {
+            const r = pendingEval; pendingEval = null;
+            if (mv && mv !== "(none)" && !lastEval.best) lastEval.best = mv;
+            r({ ...lastEval });
+          } else if (pendingResolve) {
+            const r = pendingResolve; pendingResolve = null; r(mv);
+          }
         }
       };
       worker.onerror = () => { clearTimeout(timeout); cleanup(); mode = "백엔드/내장 엔진"; resolve(false); };
@@ -95,7 +111,7 @@ const Engine = (() => {
   /* ---------- 3순위: 브라우저 내장 JS 알파-베타 ---------- */
   const PVAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 
-  function evaluate(g) {
+  function staticEval(g) {
     if (g.in_checkmate()) return g.turn() === "w" ? -100000 : 100000;
     if (g.in_draw() || g.in_stalemate() || g.insufficient_material()) return 0;
     let score = 0;
@@ -112,7 +128,7 @@ const Engine = (() => {
   }
 
   function negamax(g, depth, alpha, beta, color) {
-    if (depth === 0 || g.game_over()) return color * evaluate(g);
+    if (depth === 0 || g.game_over()) return color * staticEval(g);
     let best = -Infinity;
     const moves = g.moves({ verbose: true })
       .sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
@@ -155,6 +171,64 @@ const Engine = (() => {
     return best.from + best.to + (best.promotion || "");
   }
 
+  /* ---------- 평가(분석/리뷰용) ---------- */
+  function workerEval(fen, depth) {
+    return new Promise((resolve) => {
+      if (!ready || !worker) { resolve(null); return; }
+      lastEval = { score: null, mate: null, best: null };
+      pendingEval = resolve;
+      worker.postMessage("setoption name UCI_LimitStrength value false");
+      worker.postMessage("setoption name Skill Level value 20");
+      worker.postMessage("position fen " + fen);
+      worker.postMessage(`go depth ${depth}`);
+      setTimeout(() => {
+        if (pendingEval) { const r = pendingEval; pendingEval = null; r({ ...lastEval }); }
+      }, 6000);
+    });
+  }
+
+  function jsEval(fen, depth) {
+    const g = new Chess(fen);
+    if (g.in_checkmate()) {
+      // 둘 차례가 외통 = 진 쪽
+      return { score: null, mate: g.turn() === "w" ? -1 : 1, best: null };
+    }
+    const legal = g.moves({ verbose: true });
+    if (!legal.length) return { score: 0, mate: null, best: null };
+    const color = g.turn() === "w" ? 1 : -1;
+    let best = legal[0], bestVal = -Infinity, alpha = -Infinity;
+    const ordered = legal.sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
+    for (const m of ordered) {
+      g.move(m);
+      const val = -negamax(g, depth - 1, -Infinity, -alpha, -color);
+      g.undo();
+      if (val > bestVal) { bestVal = val; best = m; }
+      if (bestVal > alpha) alpha = bestVal;
+    }
+    // bestVal 은 둘 차례 관점 → 백 관점으로 변환
+    const whiteScore = color === 1 ? bestVal : -bestVal;
+    return { score: Math.round(whiteScore), mate: null,
+             best: best.from + best.to + (best.promotion || "") };
+  }
+
+  /** 분석용 평가. 반환: {score(백관점 센티폰)|null, mate(백관점 수)|null, best(uci)} */
+  async function evaluate(fen, depth) {
+    depth = depth || 12;
+    const turn = fen.split(" ")[1] === "b" ? -1 : 1;
+    if (ready) {
+      const r = await workerEval(fen, depth);
+      if (r) {
+        // WASM 점수는 '둘 차례' 관점 → 백 관점으로 변환
+        const out = { best: r.best, score: null, mate: null };
+        if (r.mate != null) out.mate = turn === 1 ? r.mate : -r.mate;
+        else if (r.score != null) out.score = turn === 1 ? r.score : -r.score;
+        return out;
+      }
+    }
+    // 폴백: 내장 JS 평가
+    return jsEval(fen, Math.min(depth, 3));
+  }
+
   /* ---------- 메인 진입점 ---------- */
   async function getBestMove(fen, bot, randomMoveFn) {
     if (bot.randomness && Math.random() < bot.randomness && randomMoveFn) {
@@ -178,5 +252,5 @@ const Engine = (() => {
   function usingWasm() { return ready; }
   function describe() { return mode; }
 
-  return { init, getBestMove, usingWasm, describe };
+  return { init, getBestMove, evaluate, usingWasm, describe };
 })();

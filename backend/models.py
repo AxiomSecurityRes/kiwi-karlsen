@@ -21,6 +21,11 @@ class User(Base):
     losses = Column(Integer, default=0, nullable=False)
     draws = Column(Integer, default=0, nullable=False)
 
+    # 스트릭(연속 활동 일수)
+    streak_current = Column(Integer, default=0, nullable=False)
+    streak_best = Column(Integer, default=0, nullable=False)
+    streak_last = Column(String(10), default="", nullable=False)  # 'YYYY-MM-DD'
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     def public_dict(self) -> dict:
@@ -33,6 +38,8 @@ class User(Base):
             "losses": self.losses,
             "draws": self.draws,
             "games": self.wins + self.losses + self.draws,
+            "streakCurrent": self.streak_current,
+            "streakBest": self.streak_best,
         }
 
 
@@ -54,3 +61,44 @@ class Game(Base):
     black_rating_change = Column(Float, default=0.0)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def summary_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "white": self.white_name,
+            "black": self.black_name,
+            "whiteId": self.white_id,
+            "blackId": self.black_id,
+            "result": self.result,
+            "reason": self.reason,
+            "createdAt": self.created_at.isoformat() if self.created_at else "",
+        }
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    requester_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    addressee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(10), nullable=False, default="pending")  # pending | accepted
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class DirectMessage(Base):
+    __tablename__ = "direct_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    recipient_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "fromId": self.sender_id,
+            "toId": self.recipient_id,
+            "text": self.text,
+            "ts": self.created_at.isoformat() if self.created_at else "",
+        }

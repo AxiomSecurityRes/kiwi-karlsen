@@ -15,7 +15,7 @@ from typing import Optional
 import chess
 from fastapi import WebSocket
 
-from . import glicko
+from . import glicko, streak
 from .config import settings
 from .database import SessionLocal
 from .models import Game, User
@@ -67,6 +67,19 @@ class GameServer:
         self.games: dict[str, LiveGame] = {}
         self._lock = asyncio.Lock()
         self._watcher_started = False
+        self.loop = None  # 이벤트 루프 (REST→WS 푸시용)
+
+    def set_loop(self, loop) -> None:
+        self.loop = loop
+
+    def notify(self, user_id: int, payload: dict) -> None:
+        """동기(REST) 컨텍스트에서 온라인 사용자에게 실시간 메시지 푸시."""
+        if user_id not in self.online or self.loop is None:
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(self._send(user_id, payload), self.loop)
+        except Exception:
+            pass
 
     # ---------- 시간초과 감시 백그라운드 태스크 ----------
     def ensure_watcher(self) -> None:
@@ -376,6 +389,9 @@ class GameServer:
                     white.draws += 1; black.draws += 1
                 new_white_rating = round(white.rating)
                 new_black_rating = round(black.rating)
+                # 대국 종료도 활동 → 스트릭 갱신
+                streak.update_streak(white)
+                streak.update_streak(black)
                 db.add(Game(
                     white_id=game.white_id, black_id=game.black_id,
                     white_name=game.white_name, black_name=game.black_name,

@@ -34,35 +34,89 @@
   }
   window.kiwiShowGame = showGame;
 
-  // ---- 로그인 ----
-  async function doLogin() {
+  // ---- 로그인 / 회원가입 ----
+  let authMode = "login"; // "login" | "register"
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    $("loginError").textContent = "";
+    if (mode === "login") {
+      $("authTitle").textContent = "🥝 로그인";
+      $("authSubtitle").textContent = "키위 카를센에 오신 것을 환영합니다.";
+      $("loginBtn").textContent = "로그인";
+      $("loginPassword").setAttribute("autocomplete", "current-password");
+      $("authSwitchText").textContent = "계정이 없으신가요?";
+      $("authSwitch").textContent = "회원가입";
+    } else {
+      $("authTitle").textContent = "🥝 회원가입";
+      $("authSubtitle").textContent = "새 계정을 만들어 레이팅과 스트릭을 기록하세요.";
+      $("loginBtn").textContent = "회원가입";
+      $("loginPassword").setAttribute("autocomplete", "new-password");
+      $("authSwitchText").textContent = "이미 계정이 있으신가요?";
+      $("authSwitch").textContent = "로그인";
+    }
+  }
+
+  async function doAuth() {
     const username = $("loginUsername").value.trim();
     const password = $("loginPassword").value;
     $("loginError").textContent = "";
     if (username.length < 2) {
-      $("loginError").textContent = "이름은 2자 이상이어야 합니다.";
+      $("loginError").textContent = "사용자 이름은 2자 이상이어야 합니다.";
       return;
     }
+    if (password.length < 6) {
+      $("loginError").textContent = "비밀번호는 6자 이상이어야 합니다.";
+      return;
+    }
+    $("loginBtn").disabled = true;
     try {
-      const { token, user } = await API.login(username, password);
+      const fn = authMode === "register" ? API.register : API.login;
+      const { token, user } = await fn(username, password);
       API.setSession(token, user);
       enterApp(user, token);
     } catch (e) {
       $("loginError").textContent = e.message;
+    } finally {
+      $("loginBtn").disabled = false;
     }
   }
 
-  function enterApp(user, token) {
-    $("userChip").textContent = `${user.username} (${user.rating})`;
-    $("userChip").classList.remove("hidden");
-    $("logoutBtn").classList.remove("hidden");
-    showLobby();
-    Socket.connect(token);
+  function renderStreak(user) {
+    if (!user) return;
+    $("streakCurrent").textContent = user.streakCurrent != null ? user.streakCurrent : 0;
+    $("streakBest").textContent = user.streakBest != null ? user.streakBest : 0;
   }
 
-  $("loginBtn").addEventListener("click", doLogin);
-  $("loginPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
-  $("loginUsername").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+  function enterApp(user, token) {
+    const streakTxt = user.streakCurrent ? ` 🔥${user.streakCurrent}` : "";
+    $("userChip").textContent = `${user.username} (${user.rating})${streakTxt}`;
+    $("userChip").classList.remove("hidden");
+    $("logoutBtn").classList.remove("hidden");
+    renderStreak(user);
+    showLobby();
+    Socket.connect(token);
+    if (window.kiwiStartFriends) window.kiwiStartFriends();
+    // 접속 활동으로 스트릭 갱신 후 최신값 반영
+    API.streakPing().then((res) => {
+      if (res && res.streak) {
+        user.streakCurrent = res.streak.current;
+        user.streakBest = res.streak.best;
+        API.setSession(API.getToken(), user);
+        renderStreak(user);
+        const t = user.streakCurrent ? ` 🔥${user.streakCurrent}` : "";
+        $("userChip").textContent = `${user.username} (${user.rating})${t}`;
+      }
+    }).catch(() => {});
+  }
+
+  $("loginBtn").addEventListener("click", doAuth);
+  $("loginPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") doAuth(); });
+  $("loginUsername").addEventListener("keydown", (e) => { if (e.key === "Enter") doAuth(); });
+  $("authSwitch").addEventListener("click", (e) => {
+    e.preventDefault();
+    setAuthMode(authMode === "login" ? "register" : "login");
+  });
 
   $("logoutBtn").addEventListener("click", (e) => {
     e.preventDefault();
@@ -203,6 +257,7 @@
   window.kiwiEscapeHtml = escapeHtml;
 
   // ---- 자동 로그인 (세션 복원) ----
+  setAuthMode("login");
   (async function init() {
     const token = API.getToken();
     if (token) {

@@ -16,3 +16,17 @@ class BotMoveRequest(BaseModel):
 class PuzzleSolvedRequest(BaseModel):
     puzzle_id: str
     success: bool
+
+
+class FriendRequestBody(BaseModel):
+    username: str = Field(min_length=2, max_length=40)
+
+
+class FriendRespondBody(BaseModel):
+    request_id: int
+    accept: bool
+
+
+class DMBody(BaseModel):
+    to_id: int
+    text: str = Field(min_length=1, max_length=1000)
