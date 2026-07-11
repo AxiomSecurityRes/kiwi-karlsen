@@ -26,7 +26,12 @@
       <h2>🤖 상대할 키위 봇을 선택하세요</h2>
       <p class="muted">난이도는 입문(Kiwi Baby)부터 최고난도(Kiwi Grandmaster)까지 8단계입니다.</p>
       <div id="botGrid" class="bot-grid"></div>
-      <div style="margin-top:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <div style="margin-top:18px;padding:14px;border:2px dashed var(--kiwi-green);border-radius:12px;background:var(--kiwi-cream);">
+        <label style="display:block;margin-bottom:6px;">🎯 또는 ELO 직접 지정: <b id="eloValue">1200</b> <span id="sliderPick" style="color:var(--kiwi-green-dark);font-weight:700;"></span></label>
+        <input type="range" id="eloSlider" min="100" max="3200" step="100" value="1200" style="width:100%;" />
+        <p class="muted" id="eloDesc" style="margin:6px 0 0;font-size:0.85rem;"></p>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <label style="margin:0;">내 색상:</label>
         <select id="colorSelect" style="width:auto;margin:0;">
           <option value="white">백 (선공)</option>
@@ -61,6 +66,8 @@
           </div>
           <div class="status" id="botStatus">당신의 차례입니다.</div>
           <div class="center">
+            <button class="btn secondary small" id="hintBtn">💡 힌트</button>
+            <button class="btn secondary small" id="undoBtn">↩ 무르기</button>
             <button class="btn danger small" id="botResignBtn">기권</button>
             <button class="btn secondary small" id="botNewBtn">새 대국</button>
           </div>
@@ -89,13 +96,14 @@
     </div>
   </div>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 봇과의 대국은 레이팅에 반영되지 않습니다. · v6</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 봇과의 대국은 레이팅에 반영되지 않습니다. · v7</footer>
 
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
   <script src="/assets/vendor/chess-0.10.3.min.js"></script>
   <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
   <script src="/js/api.js"></script>
+  <script src="/js/settings.js"></script>
   <script src="/js/sounds.js"></script>
   <script src="/js/engine.js"></script>
   <script src="/js/tapmove.js"></script>

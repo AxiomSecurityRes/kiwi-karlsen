@@ -41,8 +41,8 @@ const API = (() => {
     me: () => request("/api/me"),
     streakPing: () => request("/api/streak/ping", { method: "POST" }),
     bots: () => request("/api/bots"),
-    botMove: (fen, level) =>
-      request("/api/bot/move", { method: "POST", body: JSON.stringify({ fen, level }) }),
+    botMove: (fen, level, elo) =>
+      request("/api/bot/move", { method: "POST", body: JSON.stringify({ fen, level: level || null, elo: elo || null }) }),
     leaderboard: () => request("/api/leaderboard"),
     online: () => request("/api/online"),
     randomPuzzle: (min = 0, max = 4000, theme = "") =>

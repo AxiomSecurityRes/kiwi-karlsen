@@ -18,12 +18,13 @@ const Sounds = (() => {
   const cache = {};
   let unlocked = false;
   let enabled = true;
+  let volume = 0.6;
 
   function preload() {
     for (const key in FILES) {
       const a = new Audio(BASE + FILES[key]);
       a.preload = "auto";
-      a.volume = 0.6;
+      a.volume = volume;
       cache[key] = a;
     }
   }
@@ -49,7 +50,7 @@ const Sounds = (() => {
     if (!enabled || !cache[name]) return;
     try {
       const a = cache[name].cloneNode();
-      a.volume = 0.6;
+      a.volume = volume;
       const p = a.play();
       if (p && p.catch) p.catch(() => { /* 자동재생 차단 무시 */ });
     } catch (e) { /* noop */ }
@@ -66,6 +67,7 @@ const Sounds = (() => {
   }
 
   function setEnabled(v) { enabled = v; }
+  function setVolume(v) { volume = Math.max(0, Math.min(1, v)); }
 
   // 첫 클릭/키 입력에서 unlock
   ["click", "keydown", "touchstart"].forEach((evt) =>
@@ -73,5 +75,5 @@ const Sounds = (() => {
   );
 
   preload();
-  return { play, playForMove, setEnabled, unlock };
+  return { play, playForMove, setEnabled, setVolume, unlock };
 })();

@@ -115,7 +115,7 @@ def get_bots():
 def bot_move(req: BotMoveRequest):
     """클라이언트 WASM 엔진 폴백용 백엔드 봇 수."""
     try:
-        uci = engine.best_move(req.fen, req.level)
+        uci = engine.best_move(req.fen, req.level, req.elo)
         return {"uci": uci}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

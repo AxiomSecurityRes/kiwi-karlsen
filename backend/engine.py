@@ -190,7 +190,58 @@ def _search_move(board: chess.Board, level: int) -> chess.Move:
     return best_move
 
 
-def best_move(fen: str, level: int) -> str:
+
+# ---------- ELO 강도 모델 (프런트엔드와 동일 공식) ----------
+import math as _math
+
+
+def elo_params(elo: int) -> dict:
+    elo = max(100, min(3200, int(elo or 1200)))
+    return {
+        "elo": elo,
+        "sf_depth": max(6, min(18, 6 + elo // 250)),
+        "sf_movetime": max(100, min(900, 80 + elo // 4)),
+        "p_err": max(0.02, min(0.93, 1.15 - elo / 2400)),
+        "max_loss": 30 + round(1000 * _math.exp(-elo / 700)),
+    }
+
+
+def _rank_moves(board: chess.Board, depth: int) -> list[tuple[chess.Move, int]]:
+    """모든 합법수를 얕은 탐색으로 랭킹 (mover 관점, 내림차순)."""
+    color = 1 if board.turn == chess.WHITE else -1
+    ranked = []
+    for move in board.legal_moves:
+        board.push(move)
+        if board.is_checkmate():
+            val = 100000
+        else:
+            val = -_negamax(board, depth, -10**9, 10**9, -color)
+        board.pop()
+        ranked.append((move, val))
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    return ranked
+
+
+def _pick_error_move(board: chess.Board, max_loss: int):
+    ranked = _rank_moves(board, 1)
+    if len(ranked) < 2:
+        return None
+    best_score = ranked[0][1]
+    cands = [(m, best_score - v) for m, v in ranked if 0 < best_score - v <= max_loss]
+    if not cands:
+        return None
+    T = max(20.0, max_loss / 2.0)
+    weights = [_math.exp(-loss / T) for _, loss in cands]
+    total = sum(weights)
+    x = random.random() * total
+    for (m, _), w in zip(cands, weights):
+        x -= w
+        if x <= 0:
+            return m
+    return cands[-1][0]
+
+
+def best_move_OLD_UNUSED(fen: str, level: int) -> str:
     """주어진 FEN 에서 봇의 최선수를 UCI 문자열로 반환. 항상 성공한다."""
     board = chess.Board(fen)
     if board.is_game_over():
@@ -228,3 +279,48 @@ def best_move(fen: str, level: int) -> str:
 
     # 내장 알파-베타 엔진 (Stockfish 미설치 시에도 항상 동작)
     return _search_move(board, level).uci()
+
+
+def best_move(fen: str, level=None, elo=None) -> str:
+    """봇 최선수. elo 지정 시 ELO 강도 모델, 아니면 level 봇의 approx_rating 사용."""
+    board = chess.Board(fen)
+    if board.is_game_over():
+        raise ValueError("Game already over")
+
+    if elo is None:
+        cfg_bot = get_bot(level or 4)
+        elo = cfg_bot.get("approx_rating", 1200)
+    p = elo_params(elo)
+
+    # 1) 풀 스트렝스 최선수
+    best = None
+    if _stockfish_available():
+        try:
+            with chess.engine.SimpleEngine.popen_uci(settings.STOCKFISH_PATH) as eng:
+                try:
+                    eng.configure({"UCI_LimitStrength": False, "Skill Level": 20})
+                except Exception:
+                    pass
+                limit = chess.engine.Limit(depth=p["sf_depth"], time=p["sf_movetime"] / 1000.0)
+                result = eng.play(board, limit)
+                if result.move is not None:
+                    best = result.move
+        except Exception:
+            best = None
+    if best is None:
+        depth = 3 if elo >= 900 else 2
+        best = _search_move_fullstrength(board, depth)
+
+    # 2) 실수 모델
+    if random.random() < p["p_err"]:
+        err = _pick_error_move(board, p["max_loss"])
+        if err is not None:
+            return err.uci()
+    return best.uci()
+
+
+def _search_move_fullstrength(board: chess.Board, depth: int) -> chess.Move:
+    ranked = _rank_moves(board, max(1, depth - 1))
+    if not ranked:
+        raise ValueError("No legal moves")
+    return ranked[0][0]

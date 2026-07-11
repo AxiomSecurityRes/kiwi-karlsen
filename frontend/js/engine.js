@@ -1,7 +1,7 @@
-/* 체스 엔진 래퍼 — 3중 폴백 구조.
-   1순위: 같은 도메인의 /assets/engine/stockfish.js 를 Web Worker(WASM) 로 구동.
-   2순위: 백엔드 /api/bot/move (서버 Stockfish 또는 파이썬 알파-베타).
-   3순위: 브라우저 내장 JS 알파-베타 (오프라인/오류 시에도 항상 동작). */
+/* 체스 엔진 래퍼 — 3중 폴백 + ELO 강도 모델 + 병렬 리뷰 평가.
+   1순위: /assets/engine/stockfish.js (WASM Web Worker)
+   2순위: 백엔드 /api/bot/move
+   3순위: 브라우저 내장 JS 알파-베타 */
 const Engine = (() => {
   let worker = null;
   let ready = false;
@@ -11,45 +11,36 @@ const Engine = (() => {
   let lastEval = { score: null, mate: null, best: null };
   let mode = "내장 JS 엔진";
 
+  function setting(key, dflt) {
+    try { if (window.KiwiSettings) return window.KiwiSettings.get(key, dflt); } catch (e) {}
+    return dflt;
+  }
+
   function init() {
     return new Promise((resolve) => {
       if (initTried) { resolve(ready); return; }
       initTried = true;
-      // stockfish.js 존재 여부를 먼저 확인 (없으면 Worker 생성 자체를 건너뜀)
       fetch("/assets/engine/stockfish.js", { method: "HEAD" })
         .then((res) => {
           const ct = res.headers.get("content-type") || "";
-          if (!res.ok || ct.includes("text/html")) {
-            mode = "백엔드/내장 엔진";
-            resolve(false);
-            return;
-          }
-          spawnWorker(resolve);
+          if (!res.ok || ct.includes("text/html")) { mode = "백엔드/내장 엔진"; resolve(false); return; }
+          spawnMain(resolve);
         })
         .catch(() => { mode = "백엔드/내장 엔진"; resolve(false); });
     });
   }
 
-  function spawnWorker(resolve) {
+  function spawnMain(resolve) {
     try {
       worker = new Worker("/assets/engine/stockfish.js");
       let gotUci = false;
-      const timeout = setTimeout(() => {
-        if (!ready) { cleanup(); mode = "백엔드/내장 엔진"; resolve(false); }
-      }, 5000);
-
+      const timeout = setTimeout(() => { if (!ready) { cleanup(); mode = "백엔드/내장 엔진"; resolve(false); } }, 5000);
       worker.onmessage = (e) => {
         const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
-        if (line.startsWith("uciok")) {
-          gotUci = true;
-          worker.postMessage("isready");
-        } else if (line.startsWith("readyok") && gotUci) {
-          ready = true;
-          mode = "브라우저 Stockfish (WASM)";
-          clearTimeout(timeout);
-          resolve(true);
+        if (line.startsWith("uciok")) { gotUci = true; worker.postMessage("isready"); }
+        else if (line.startsWith("readyok") && gotUci) {
+          ready = true; mode = "브라우저 Stockfish (WASM)"; clearTimeout(timeout); resolve(true);
         } else if (line.startsWith("info") && line.indexOf("score") !== -1 && pendingEval) {
-          // 평가 정보 누적 (마지막 깊이의 값을 사용)
           const cpM = line.match(/score cp (-?\d+)/);
           const mateM = line.match(/score mate (-?\d+)/);
           const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
@@ -62,53 +53,36 @@ const Engine = (() => {
             const r = pendingEval; pendingEval = null;
             if (mv && mv !== "(none)" && !lastEval.best) lastEval.best = mv;
             r({ ...lastEval });
-          } else if (pendingResolve) {
-            const r = pendingResolve; pendingResolve = null; r(mv);
-          }
+          } else if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(mv); }
         }
       };
       worker.onerror = () => { clearTimeout(timeout); cleanup(); mode = "백엔드/내장 엔진"; resolve(false); };
       worker.postMessage("uci");
-    } catch (err) {
-      cleanup(); mode = "백엔드/내장 엔진"; resolve(false);
-    }
+    } catch (err) { cleanup(); mode = "백엔드/내장 엔진"; resolve(false); }
   }
 
-  function cleanup() {
-    if (worker) { try { worker.terminate(); } catch (e) {} }
-    worker = null;
-    ready = false;
-  }
+  function cleanup() { if (worker) { try { worker.terminate(); } catch (e) {} } worker = null; ready = false; }
 
-  function workerMove(fen, params) {
+  function workerBestMove(fen, depth, movetime) {
     return new Promise((resolve) => {
       if (!ready || !worker) { resolve(null); return; }
       pendingResolve = resolve;
-      if (params.elo) {
-        worker.postMessage("setoption name UCI_LimitStrength value true");
-        worker.postMessage("setoption name UCI_Elo value " + params.elo);
-      } else {
-        worker.postMessage("setoption name UCI_LimitStrength value false");
-        worker.postMessage("setoption name Skill Level value " + params.skill);
-      }
+      worker.postMessage("setoption name UCI_LimitStrength value false");
+      worker.postMessage("setoption name Skill Level value 20");
       worker.postMessage("position fen " + fen);
-      worker.postMessage(`go depth ${params.depth} movetime ${params.movetime}`);
-      setTimeout(() => {
-        if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(null); }
-      }, params.movetime + 4000);
+      worker.postMessage(`go depth ${depth} movetime ${movetime}`);
+      setTimeout(() => { if (pendingResolve) { const r = pendingResolve; pendingResolve = null; r(null); } }, movetime + 4000);
     });
   }
 
-  async function backendMove(fen, level) {
+  async function backendMove(fen, level, elo) {
     try {
-      const { uci } = await API.botMove(fen, level);
+      const { uci } = await API.botMove(fen, level, elo);
       return uci;
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
-  /* ---------- 3순위: 브라우저 내장 JS 알파-베타 ---------- */
+  /* ---------- 내장 JS 알파-베타 ---------- */
   const PVAL = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 
   function staticEval(g) {
@@ -116,13 +90,10 @@ const Engine = (() => {
     if (g.in_draw() || g.in_stalemate() || g.insufficient_material()) return 0;
     let score = 0;
     const board = g.board();
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const sq = board[r][c];
-        if (!sq) continue;
-        const v = PVAL[sq.type];
-        score += sq.color === "w" ? v : -v;
-      }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const sq = board[r][c];
+      if (!sq) continue;
+      score += (sq.color === "w" ? 1 : -1) * PVAL[sq.type];
     }
     return score;
   }
@@ -130,8 +101,7 @@ const Engine = (() => {
   function negamax(g, depth, alpha, beta, color) {
     if (depth === 0 || g.game_over()) return color * staticEval(g);
     let best = -Infinity;
-    const moves = g.moves({ verbose: true })
-      .sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
+    const moves = g.moves({ verbose: true }).sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
     for (const m of moves) {
       g.move(m);
       const val = -negamax(g, depth - 1, -beta, -alpha, -color);
@@ -143,114 +113,205 @@ const Engine = (() => {
     return best;
   }
 
-  function jsEngineMove(fen, bot) {
+  // 모든 합법수를 얕은 탐색으로 랭킹 (mover 관점 점수, 내림차순)
+  function rankMoves(fen, depth) {
     const g = new Chess(fen);
     const legal = g.moves({ verbose: true });
-    if (!legal.length) return null;
-    // 즉시 외통
-    for (const m of legal) {
-      g.move(m); const mate = g.in_checkmate(); g.undo();
-      if (mate) return m.from + m.to + (m.promotion || "");
-    }
-    if (bot.randomness && Math.random() < bot.randomness) {
-      const m = legal[Math.floor(Math.random() * legal.length)];
-      return m.from + m.to + (m.promotion || "");
-    }
-    const depth = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 2, 6: 3, 7: 3, 8: 3 }[bot.level] || 2;
     const color = g.turn() === "w" ? 1 : -1;
-    let best = legal[0], bestVal = -Infinity, alpha = -Infinity;
-    const ordered = legal.sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
-    for (const m of ordered) {
+    const ranked = [];
+    for (const m of legal) {
       g.move(m);
-      let val = -negamax(g, depth - 1, -Infinity, -alpha, -color);
+      let val;
+      if (g.in_checkmate()) val = 100000;
+      else val = -negamax(g, depth, -Infinity, Infinity, -color);
       g.undo();
-      val += (Math.random() * 6 - 3);
-      if (val > bestVal) { bestVal = val; best = m; }
-      if (bestVal > alpha) alpha = bestVal;
+      ranked.push({ uci: m.from + m.to + (m.promotion || ""), score: val });
     }
-    return best.from + best.to + (best.promotion || "");
+    ranked.sort((a, b) => b.score - a.score);
+    return ranked;
   }
 
-  /* ---------- 평가(분석/리뷰용) ---------- */
-  function workerEval(fen, depth) {
-    return new Promise((resolve) => {
-      if (!ready || !worker) { resolve(null); return; }
-      lastEval = { score: null, mate: null, best: null };
-      pendingEval = resolve;
-      worker.postMessage("setoption name UCI_LimitStrength value false");
-      worker.postMessage("setoption name Skill Level value 20");
-      worker.postMessage("position fen " + fen);
-      worker.postMessage(`go depth ${depth}`);
-      setTimeout(() => {
-        if (pendingEval) { const r = pendingEval; pendingEval = null; r({ ...lastEval }); }
-      }, 6000);
+  function jsBestMove(fen, depth) {
+    const r = rankMoves(fen, Math.max(1, depth - 1));
+    return r.length ? r[0].uci : null;
+  }
+
+  /* ---------- ELO 강도 모델 ---------- */
+  function eloParams(elo) {
+    elo = Math.max(100, Math.min(3200, elo || 1200));
+    return {
+      elo,
+      depth: Math.max(6, Math.min(18, 6 + Math.floor(elo / 250))),
+      movetime: Math.max(100, Math.min(900, 80 + Math.floor(elo / 4))),
+      pErr: Math.max(0.02, Math.min(0.93, 1.15 - elo / 2400)),
+      maxLoss: 30 + Math.round(1000 * Math.exp(-elo / 700)),
+    };
+  }
+
+  function pickErrorMove(fen, maxLoss) {
+    let ranked;
+    try { ranked = rankMoves(fen, 1); } catch (e) { return null; }
+    if (ranked.length < 2) return null;
+    const bestScore = ranked[0].score;
+    const cands = ranked.filter((r) => {
+      const loss = bestScore - r.score;
+      return loss > 0 && loss <= maxLoss;
     });
+    if (!cands.length) return null;
+    const T = Math.max(20, maxLoss / 2);
+    const weights = cands.map((r) => Math.exp(-(bestScore - r.score) / T));
+    const sum = weights.reduce((a, b) => a + b, 0);
+    let x = Math.random() * sum;
+    for (let i = 0; i < cands.length; i++) { x -= weights[i]; if (x <= 0) return cands[i].uci; }
+    return cands[cands.length - 1].uci;
   }
 
+  async function getMoveForElo(fen, elo, randomMoveFn) {
+    const cfg = eloParams(elo);
+    let best = null;
+    if (ready) best = await workerBestMove(fen, cfg.depth, cfg.movetime);
+    if (!best || best === "(none)") best = await backendMove(fen, null, cfg.elo);
+    if (!best) best = jsBestMove(fen, 3);
+    if (!best) return randomMoveFn ? randomMoveFn() : null;
+    if (Math.random() < cfg.pErr) {
+      const err = pickErrorMove(fen, cfg.maxLoss);
+      if (err) return err;
+    }
+    return best;
+  }
+
+  // (호환) bot 객체 기반 — customElo 또는 approx_rating 으로 ELO 모델 사용
+  async function getBestMove(fen, bot, randomMoveFn) {
+    const elo = (bot && (bot.customElo || bot.approx_rating)) || 1200;
+    return getMoveForElo(fen, elo, randomMoveFn);
+  }
+
+  /* ---------- 단일 평가 (분석 보드 실시간) ---------- */
   function jsEval(fen, depth) {
     const g = new Chess(fen);
-    if (g.in_checkmate()) {
-      // 둘 차례가 외통 = 진 쪽
-      return { score: null, mate: g.turn() === "w" ? -1 : 1, best: null };
-    }
+    if (g.in_checkmate()) return { score: null, mate: g.turn() === "w" ? -1 : 1, best: null };
     const legal = g.moves({ verbose: true });
     if (!legal.length) return { score: 0, mate: null, best: null };
-    const color = g.turn() === "w" ? 1 : -1;
-    let best = legal[0], bestVal = -Infinity, alpha = -Infinity;
-    const ordered = legal.sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
-    for (const m of ordered) {
-      g.move(m);
-      const val = -negamax(g, depth - 1, -Infinity, -alpha, -color);
-      g.undo();
-      if (val > bestVal) { bestVal = val; best = m; }
-      if (bestVal > alpha) alpha = bestVal;
-    }
-    // bestVal 은 둘 차례 관점 → 백 관점으로 변환
-    const whiteScore = color === 1 ? bestVal : -bestVal;
-    return { score: Math.round(whiteScore), mate: null,
-             best: best.from + best.to + (best.promotion || "") };
+    const ranked = rankMoves(fen, Math.max(1, depth - 1));
+    return { score: Math.round(ranked[0].score), mate: null, best: ranked[0].uci, moverPOV: true };
   }
 
-  /** 분석용 평가. 반환: {score(백관점 센티폰)|null, mate(백관점 수)|null, best(uci)} */
-  async function evaluate(fen, depth) {
-    depth = depth || 12;
+  async function evaluate(fen) {
+    const movetime = setting("evalMovetime", 400);
     const turn = fen.split(" ")[1] === "b" ? -1 : 1;
     if (ready) {
-      const r = await workerEval(fen, depth);
+      lastEval = { score: null, mate: null, best: null };
+      const r = await new Promise((resolve) => {
+        pendingEval = resolve;
+        worker.postMessage("setoption name UCI_LimitStrength value false");
+        worker.postMessage("setoption name Skill Level value 20");
+        worker.postMessage("position fen " + fen);
+        worker.postMessage(`go depth 18 movetime ${movetime}`);
+        setTimeout(() => { if (pendingEval) { const x = pendingEval; pendingEval = null; x({ ...lastEval }); } }, movetime + 3000);
+      });
       if (r) {
-        // WASM 점수는 '둘 차례' 관점 → 백 관점으로 변환
         const out = { best: r.best, score: null, mate: null };
         if (r.mate != null) out.mate = turn === 1 ? r.mate : -r.mate;
         else if (r.score != null) out.score = turn === 1 ? r.score : -r.score;
         return out;
       }
     }
-    // 폴백: 내장 JS 평가
-    return jsEval(fen, Math.min(depth, 3));
+    const r = jsEval(fen, 3);
+    if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
+    return r;
   }
 
-  /* ---------- 메인 진입점 ---------- */
-  async function getBestMove(fen, bot, randomMoveFn) {
-    if (bot.randomness && Math.random() < bot.randomness && randomMoveFn) {
-      const rnd = randomMoveFn();
-      if (rnd) return rnd;
+  /* ---------- 병렬 리뷰 평가 (워커 풀) ---------- */
+  function spawnEvalWorker() {
+    return new Promise((resolve) => {
+      let w;
+      try { w = new Worker("/assets/engine/stockfish.js"); } catch (e) { resolve(null); return; }
+      let gotUci = false;
+      const to = setTimeout(() => { try { w.terminate(); } catch (e) {} resolve(null); }, 5000);
+      w.onmessage = (e) => {
+        const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
+        if (line.startsWith("uciok")) { gotUci = true; w.postMessage("isready"); }
+        else if (line.startsWith("readyok") && gotUci) { clearTimeout(to); w.onmessage = null; resolve(w); }
+      };
+      w.onerror = () => { clearTimeout(to); resolve(null); };
+      w.postMessage("uci");
+    });
+  }
+
+  function evalOnWorker(w, fen, movetime) {
+    return new Promise((resolve) => {
+      const ev = { score: null, mate: null, best: null };
+      const to = setTimeout(() => { w.onmessage = null; resolve(ev); }, movetime + 3000);
+      w.onmessage = (e) => {
+        const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
+        if (line.startsWith("info") && line.indexOf("score") !== -1) {
+          const cpM = line.match(/score cp (-?\d+)/);
+          const mateM = line.match(/score mate (-?\d+)/);
+          const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          if (cpM) { ev.score = parseInt(cpM[1], 10); ev.mate = null; }
+          if (mateM) { ev.mate = parseInt(mateM[1], 10); ev.score = null; }
+          if (pvM) ev.best = pvM[1];
+        } else if (line.startsWith("bestmove")) {
+          clearTimeout(to); w.onmessage = null;
+          const mv = line.split(" ")[1];
+          if (mv && mv !== "(none)" && !ev.best) ev.best = mv;
+          resolve(ev);
+        }
+      };
+      w.postMessage("setoption name Skill Level value 20");
+      w.postMessage("position fen " + fen);
+      w.postMessage("go movetime " + movetime);
+    });
+  }
+
+  async function reviewEvaluate(fens, onProgress) {
+    const movetime = setting("reviewMovetime", 200);
+    const results = new Array(fens.length).fill(null);
+    let done = 0;
+
+    function toWhitePOV(fen, ev) {
+      const turn = fen.split(" ")[1] === "b" ? -1 : 1;
+      const out = { best: ev.best, score: null, mate: null };
+      if (ev.mate != null) out.mate = turn === 1 ? ev.mate : -ev.mate;
+      else if (ev.score != null) out.score = turn === 1 ? ev.score : -ev.score;
+      return out;
     }
-    // 1순위: WASM
+
     if (ready) {
-      const mv = await workerMove(fen, bot);
-      if (mv && mv !== "(none)") return mv;
+      let poolSize = setting("reviewWorkers", 0);
+      if (!poolSize) poolSize = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+      const spawns = [];
+      for (let i = 0; i < poolSize; i++) spawns.push(spawnEvalWorker());
+      const pool = (await Promise.all(spawns)).filter(Boolean);
+      if (pool.length) {
+        let next = 0;
+        async function runner(w) {
+          while (next < fens.length) {
+            const i = next++;
+            const ev = await evalOnWorker(w, fens[i], movetime);
+            results[i] = toWhitePOV(fens[i], ev);
+            done++;
+            if (onProgress) onProgress(done, fens.length);
+          }
+        }
+        await Promise.all(pool.map(runner));
+        pool.forEach((w) => { try { w.terminate(); } catch (e) {} });
+        return results;
+      }
     }
-    // 2순위: 백엔드
-    const bmv = await backendMove(fen, bot.level);
-    if (bmv) return bmv;
-    // 3순위: 브라우저 내장 JS 엔진 (항상 성공)
-    const jmv = jsEngineMove(fen, bot);
-    if (jmv) return jmv;
-    return randomMoveFn ? randomMoveFn() : null;
+    for (let i = 0; i < fens.length; i++) {
+      const turn = fens[i].split(" ")[1] === "b" ? -1 : 1;
+      const r = jsEval(fens[i], 3);
+      if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
+      results[i] = r;
+      done++;
+      if (onProgress) onProgress(done, fens.length);
+    }
+    return results;
   }
 
   function usingWasm() { return ready; }
   function describe() { return mode; }
 
-  return { init, getBestMove, evaluate, usingWasm, describe };
+  return { init, getBestMove, getMoveForElo, evaluate, reviewEvaluate, eloParams, usingWasm, describe };
 })();

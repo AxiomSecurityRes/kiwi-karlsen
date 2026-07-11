@@ -20,17 +20,40 @@
     el.style.color = color || "var(--kiwi-green-dark)";
   }
 
+  function ratingRange() {
+    let min = parseInt($("pzMin").value, 10) || 100;
+    let max = parseInt($("pzMax").value, 10) || 3500;
+    if (min > max) { const t = min; min = max; max = t; }
+    return [min, max];
+  }
+
   async function loadPuzzle() {
     setStatus("불러오는 중…");
-    const [min, max] = $("diffSelect").value.split("-").map(Number);
+    const [min, max] = ratingRange();
     const theme = $("themeSelect").value;
     try {
       puzzle = await API.randomPuzzle(min, max, theme);
     } catch (e) {
-      setStatus("조건에 맞는 퍼즐이 없습니다. 유형/난이도를 바꿔보세요.", "var(--danger)");
+      showEmptyState();
+      return;
+    }
+    if (!puzzle || !puzzle.fen || !puzzle.moves || puzzle.moves.length < 2) {
+      showEmptyState();
       return;
     }
     setupPuzzle();
+  }
+
+  function showEmptyState() {
+    setStatus("퍼즐 데이터가 없습니다.", "var(--danger)");
+    $("puzzleId").textContent = "-";
+    const boardEl = document.getElementById("puzzle-board");
+    boardEl.innerHTML = `<div style="padding:24px;background:var(--kiwi-cream);border-radius:12px;line-height:1.7;">
+      <b>🧩 Lichess 퍼즐 DB를 업로드하세요</b><br>
+      1. <a href="https://database.lichess.org/lichess_db_puzzle.csv.zst" target="_blank">lichess_db_puzzle.csv.zst</a> 다운로드<br>
+      2. zstd로 압축 해제 후 원하는 개수만 샘플링 (권장 2~5만 개)<br>
+      3. 프로젝트의 <code>data/puzzles.csv</code> 로 저장 → git push<br>
+      자세한 방법: 저장소의 <code>scripts/download_puzzles.md</code></div>`;
   }
 
   async function loadThemes() {
@@ -211,7 +234,7 @@
   $("retryBtn").addEventListener("click", () => { if (puzzle) setupPuzzle(); });
   $("hintBtn").addEventListener("click", showHint);
   $("solutionBtn").addEventListener("click", showSolution);
-  $("diffSelect").addEventListener("change", loadPuzzle);
+  $("pzApply").addEventListener("click", loadPuzzle);
   $("themeSelect").addEventListener("change", loadPuzzle);
 
   loadThemes();

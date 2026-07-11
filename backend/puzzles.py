@@ -42,44 +42,7 @@ THEME_LABELS = {
 }
 
 
-# CSV 가 없을 때 사용할 내장 샘플 (모두 검증된 1수 외통 퍼즐)
-_FALLBACK = [
-    {
-        "PuzzleId": "kiwi0001",
-        "FEN": "7k/5ppp/8/8/8/8/5PPP/4R1K1 b - - 0 1",
-        "Moves": "h8g8 e1e8",
-        "Rating": "750", "RatingDeviation": "80", "Popularity": "95",
-        "NbPlays": "100", "Themes": "mateIn1 backRankMate", "GameUrl": "", "OpeningTags": "",
-    },
-    {
-        "PuzzleId": "kiwi0002",
-        "FEN": "7k/5ppp/8/8/8/8/5PPP/3Q2K1 b - - 0 1",
-        "Moves": "h8g8 d1d8",
-        "Rating": "800", "RatingDeviation": "80", "Popularity": "94",
-        "NbPlays": "100", "Themes": "mateIn1 backRankMate", "GameUrl": "", "OpeningTags": "",
-    },
-    {
-        "PuzzleId": "kiwi0003",
-        "FEN": "6k1/5ppp/8/8/8/8/5PPP/2R3K1 b - - 0 1",
-        "Moves": "g8h8 c1c8",
-        "Rating": "820", "RatingDeviation": "80", "Popularity": "93",
-        "NbPlays": "100", "Themes": "mateIn1 backRankMate", "GameUrl": "", "OpeningTags": "",
-    },
-    {
-        "PuzzleId": "kiwi0004",
-        "FEN": "6k1/5ppp/8/8/8/8/5PPP/Q5K1 b - - 0 1",
-        "Moves": "g8h8 a1a8",
-        "Rating": "700", "RatingDeviation": "80", "Popularity": "92",
-        "NbPlays": "100", "Themes": "mateIn1 backRankMate", "GameUrl": "", "OpeningTags": "",
-    },
-    {
-        "PuzzleId": "kiwi0005",
-        "FEN": "7k/5ppp/8/8/8/8/5PPP/R5K1 b - - 0 1",
-        "Moves": "h8g8 a1a8",
-        "Rating": "730", "RatingDeviation": "80", "Popularity": "91",
-        "NbPlays": "100", "Themes": "mateIn1 backRankMate", "GameUrl": "", "OpeningTags": "",
-    },
-]
+# 내장 퍼즐 없음 — data/puzzles.csv 를 Lichess DB로 채워 사용 (scripts/download_puzzles.md)
 
 
 def _normalize(row: dict) -> Optional[dict]:
@@ -118,8 +81,6 @@ def load_puzzles() -> None:
         except Exception:
             rows = []
 
-    if not rows:
-        rows = _FALLBACK
 
     for raw in rows:
         norm = _normalize(raw)
