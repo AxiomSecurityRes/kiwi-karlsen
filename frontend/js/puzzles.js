@@ -51,7 +51,7 @@
     boardEl.innerHTML = `<div style="padding:24px;background:var(--kiwi-cream);border-radius:12px;line-height:1.7;">
       <b>🧩 Lichess 퍼즐 DB를 업로드하세요</b><br>
       1. <a href="https://database.lichess.org/lichess_db_puzzle.csv.zst" target="_blank">lichess_db_puzzle.csv.zst</a> 다운로드<br>
-      2. zstd로 압축 해제 후 원하는 개수만 샘플링 (권장 2~5만 개)<br>
+      2. 압축 해제 후 <b>일부만(2~4만 개)</b> 샘플링 — 전체 파일은 GitHub 100MB 제한에 걸립니다<br>
       3. 프로젝트의 <code>data/puzzles.csv</code> 로 저장 → git push<br>
       자세한 방법: 저장소의 <code>scripts/download_puzzles.md</code></div>`;
   }

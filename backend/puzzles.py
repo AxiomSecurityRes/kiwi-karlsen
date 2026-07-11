@@ -71,26 +71,42 @@ def load_puzzles() -> None:
     _THEME_COUNTS = {}
 
     path = settings.PUZZLE_FILE
-    rows: list[dict] = []
-    if path and os.path.exists(path):
-        try:
-            with open(path, newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for raw in reader:
-                    rows.append(raw)
-        except Exception:
-            rows = []
+    if not path or not os.path.exists(path):
+        return
 
+    # 메모리 안전: 파일 전체를 메모리에 올리지 않고 한 줄씩 스트리밍하며
+    # 저수지 표본추출(reservoir sampling)로 최대 MAX_PUZZLES 개만 유지한다.
+    # (Render 무료 플랜 512MB 에서 거대한 Lichess CSV 를 올려도 서버가 죽지 않도록)
+    max_n = settings.MAX_PUZZLES
+    scan_cap = max(max_n * 50, 2_000_000)  # 스캔 상한 (거대 파일에서 startup 지연 방지)
+    reservoir: list[dict] = []
+    seen = 0
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for raw in reader:
+                if seen >= scan_cap:
+                    break
+                norm = _normalize(raw)
+                if not norm:
+                    continue
+                norm["theme_list"] = norm["themes"].split() if norm["themes"] else []
+                seen += 1
+                if len(reservoir) < max_n:
+                    reservoir.append(norm)
+                else:
+                    j = random.randint(0, seen - 1)
+                    if j < max_n:
+                        reservoir[j] = norm
+    except Exception:
+        # 손상된 파일이라도 지금까지 읽은 것은 사용, 서버는 계속 뜬다
+        pass
 
-    for raw in rows:
-        norm = _normalize(raw)
-        if norm:
-            # 테마를 리스트로 분해해 인덱스 구축
-            norm["theme_list"] = norm["themes"].split() if norm["themes"] else []
-            _PUZZLES.append(norm)
-            _BY_ID[norm["id"]] = norm
-            for th in norm["theme_list"]:
-                _THEME_COUNTS[th] = _THEME_COUNTS.get(th, 0) + 1
+    _PUZZLES = reservoir
+    for norm in _PUZZLES:
+        _BY_ID[norm["id"]] = norm
+        for th in norm.get("theme_list", []):
+            _THEME_COUNTS[th] = _THEME_COUNTS.get(th, 0) + 1
 
 
 def count() -> int:

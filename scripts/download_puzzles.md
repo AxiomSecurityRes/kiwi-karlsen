@@ -1,55 +1,36 @@
-# 🧩 Lichess 퍼즐 데이터베이스 적용 방법
+# 🧩 Lichess 퍼즐 DB 적용 (중요: 파일 크기 주의!)
 
-기본 제공 `data/puzzles.csv` 에는 **검증된 백랭크 메이트 18개**(레이팅 500~1300, 여러 테마)가
-들어 있어 유형/난이도 필터가 바로 동작합니다. 실전용 수만~수백만 퍼즐을 쓰려면
-아래 절차로 Lichess 공개 DB를 적용하세요.
+기본 `data/puzzles.csv` 는 헤더만 있는 빈 파일입니다. 아래처럼 **일부만 샘플링**해서
+넣으세요. 전체 파일(압축 해제 시 ~1GB)을 그대로 넣으면 안 됩니다.
 
-> 중요: Lichess 전체 파일은 압축 해제 시 약 1.5GB(400만+ 퍼즐)라
-> GitHub(파일당 100MB 제한)에 그대로 올릴 수 없습니다. 반드시 일부만 샘플링해서
-> 커밋하거나(권장), 외부 저장소에서 받아오도록 해야 합니다.
+## ⚠️ 반드시 지켜야 할 것
+- **GitHub 는 100MB 초과 파일을 거부**합니다. 전체 CSV(수백 MB~1GB)는 push 자체가 안 됩니다.
+- 서버는 시작 시 퍼즐을 메모리에 로드합니다. 무료 플랜(512MB)을 고려해 **2만~4만 개**를 권장합니다.
+- 혹시 큰 파일을 넣어도 서버는 자동으로 `MAX_PUZZLES`(기본 40000)개만 무작위 표본추출하여
+  로드하므로 죽지는 않지만, GitHub push 제한 때문에라도 샘플링은 필수입니다.
 
----
+## 방법 (윈도우 PowerShell, zstd 필요)
+zstd: https://github.com/facebook/zstd/releases
 
-## 권장 방법: 일부만 샘플링해서 커밋 (가장 간단)
-
-윈도우 PowerShell 기준입니다. (zstd 압축 해제 도구 필요)
-
-### 1) 다운로드
     cd C:\Users\twtru\Desktop\kiwi-karlsen
-    Invoke-WebRequest https://database.lichess.org/lichess_db_puzzle.csv.zst -OutFile puzzles_full.csv.zst
-
-### 2) 압축 해제 (zstd: https://github.com/facebook/zstd/releases)
-    zstd -d puzzles_full.csv.zst -o puzzles_full.csv
-
-### 3) 원하는 만큼만 추출 (예: 무작위 2만 개)
-헤더 1줄 + 무작위 2만 줄만 골라 data/puzzles.csv 로 저장합니다.
-2만 개면 무료 플랜에서도 가볍게 동작합니다(약 3~4MB).
-
-    Get-Content puzzles_full.csv -TotalCount 1 | Set-Content data\puzzles.csv
-    Get-Content puzzles_full.csv | Select-Object -Skip 1 | Get-Random -Count 20000 | Add-Content data\puzzles.csv
-
-### 4) 커밋 & 배포
+    Invoke-WebRequest https://database.lichess.org/lichess_db_puzzle.csv.zst -OutFile p.csv.zst
+    zstd -d p.csv.zst -o p.csv
+    # 헤더 + 무작위 2만 개만 추출 (약 3~4MB → GitHub OK)
+    Get-Content p.csv -TotalCount 1 | Set-Content data\puzzles.csv
+    Get-Content p.csv | Select-Object -Skip 1 | Get-Random -Count 20000 | Add-Content data\puzzles.csv
+    # 임시파일 삭제(커밋 안 되게)
+    Remove-Item p.csv, p.csv.zst
     git add data/puzzles.csv
-    git commit -m "puzzle DB: Lichess 2만개 적용"
+    git commit -m "puzzle DB 2만개"
     git push
 
-Render가 자동 재배포하면서 서버 시작 시 backend/puzzles.py 가 자동으로 읽어들입니다.
-별도 코드 수정이 전혀 필요 없습니다. 퍼즐 페이지의 유형/난이도 드롭다운에
-실제 테마(포크, 핀, 엔드게임 등)가 채워집니다.
+배포 후 `/health` 의 `"puzzles"` 숫자로 로드된 개수를 확인할 수 있습니다.
 
----
-
-## CSV 형식 (Lichess 표준 — 그대로 호환)
+## CSV 형식 (Lichess 표준 그대로)
     PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
 
-- FEN: 퍼즐 시작 직전 국면
-- Moves: 공백 구분 UCI 수열. Moves[0] = 자동 재생되는 상대 수, Moves[1] 부터가 정답.
-- Rating: 난이도 -> 앱의 난이도 필터(min/max)에 사용.
-- Themes: 공백 구분 테마 코드 -> 앱의 유형 드롭다운(한글 표시)에 사용.
+- Moves[0] = 자동 재생되는 상대 수, Moves[1..] = 정답.
+- Rating → 앱의 레이팅 범위 필터, Themes → 유형 드롭다운(한글).
 
-## 다른 경로를 쓰려면 (선택)
-    PUZZLE_FILE=data/my_puzzles.csv
-
-## 메모리 주의 (Render 무료 플랜)
-무료 플랜 RAM은 512MB입니다. 퍼즐은 시작 시 메모리에 로드되므로
-5만 개 이하를 권장합니다.
+## 더 많이/적게 로드하려면
+Render 환경변수 `MAX_PUZZLES` 조정 (예: 60000). 무료 플랜은 5만 이하 권장.
