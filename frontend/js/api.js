@@ -61,6 +61,17 @@ const API = (() => {
     dmHistory: (friendId) => request("/api/friends/dm/" + friendId),
     dmSend: (to_id, text) =>
       request("/api/friends/dm", { method: "POST", body: JSON.stringify({ to_id, text }) }),
+    // 프로필
+    profileMe: () => request("/api/profile/me"),
+    profileUpdate: (data) => request("/api/profile", { method: "POST", body: JSON.stringify(data) }),
+    profileUsername: (new_username) => request("/api/profile/username", { method: "POST", body: JSON.stringify({ new_username }) }),
+    profileView: (username) => request("/api/profile/" + encodeURIComponent(username)),
+    // 관리자
+    adminStats: () => request("/api/admin/stats"),
+    adminUsers: (q) => request("/api/admin/users" + (q ? "?q=" + encodeURIComponent(q) : "")),
+    adminUpdateUser: (id, data) => request("/api/admin/user/" + id, { method: "POST", body: JSON.stringify(data) }),
+    adminDeleteUser: (id) => request("/api/admin/user/" + id, { method: "DELETE" }),
+    adminReloadPuzzles: () => request("/api/admin/reload_puzzles", { method: "POST" }),
     // 게임 기록 / 리뷰
     recentGames: () => request("/api/games/recent"),
     gameDetail: (id) => request("/api/games/" + id),

@@ -316,3 +316,16 @@ label { font-weight: 600; font-size: 0.9rem; color: var(--muted); }
   100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
 }
 .review-summary .sum-row { margin: 6px 0; line-height: 1.7; }
+
+/* ----- 프로필/관리자 ----- */
+.stat-box { background: var(--kiwi-cream); border-radius: 10px; padding: 10px; text-align: center; }
+.stat-num { font-size: 1.5rem; font-weight: 800; color: var(--kiwi-green-dark); }
+.stat-label { font-size: 0.75rem; color: var(--muted); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+.form-grid label, .card label { display: flex; flex-direction: column; font-weight: 600; font-size: 0.9rem; gap: 3px; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }
+.admin-row { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; background: var(--kiwi-cream); margin-bottom: 8px; flex-wrap: wrap; }
+.admin-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tag { font-size: 0.72rem; padding: 1px 7px; border-radius: 8px; font-weight: 700; margin-left: 4px; }
+.tag.admin { background: #2e9b53; color: #fff; }
+.tag.banned { background: #c0392b; color: #fff; }

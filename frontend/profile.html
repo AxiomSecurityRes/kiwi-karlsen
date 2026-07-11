@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>프로필 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html">로비</a>
+      <a href="/play.html">봇 대국</a>
+      <a href="/puzzles.html">퍼즐</a>
+      <a href="/analysis.html">분석</a>
+      <a href="/profile.html" class="active">프로필</a>
+      <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="card" id="viewCard">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div style="font-size:3rem;">🥝</div>
+        <div>
+          <h2 id="pfUsername" style="margin:0;">-</h2>
+          <p class="muted" id="pfRealname" style="margin:2px 0;"></p>
+          <p class="muted" id="pfMeta" style="margin:2px 0;"></p>
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:14px;">
+        <div class="stat-box"><div class="stat-num" id="pfRating">-</div><div class="stat-label">레이팅</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfGames">-</div><div class="stat-label">게임</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfWins">-</div><div class="stat-label">승</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfStreak">-</div><div class="stat-label">🔥 스트릭</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfOtb">-</div><div class="stat-label">OTB</div></div>
+      </div>
+      <div id="pfBioWrap" style="margin-top:12px;">
+        <h3 style="margin-bottom:4px;">나에 대하여</h3>
+        <p id="pfBio" class="muted">-</p>
+      </div>
+      <h3 style="margin-top:14px;">최근 게임</h3>
+      <div id="pfRecent"><p class="muted">-</p></div>
+      <div style="margin-top:14px;">
+        <button class="btn" id="editBtn">✏️ 프로필 편집</button>
+      </div>
+    </div>
+
+    <!-- 편집 (본인만) -->
+    <div class="card hidden" id="editCard">
+      <h2>✏️ 프로필 편집</h2>
+      <div class="form-grid">
+        <label>이름<input type="text" id="edFirst" maxlength="40" /></label>
+        <label>성<input type="text" id="edLast" maxlength="40" /></label>
+        <label>위치<input type="text" id="edLocation" maxlength="80" placeholder="예: 용인, 경기도" /></label>
+        <label>국가<input type="text" id="edCountry" maxlength="40" placeholder="예: 대한민국" /></label>
+        <label>OTB 레이팅<input type="number" id="edOtb" min="0" max="3500" /></label>
+      </div>
+      <label>나에 대하여<textarea id="edBio" rows="3" maxlength="1000" style="width:100%;border:2px solid var(--kiwi-cream-dark);border-radius:10px;padding:8px;"></textarea></label>
+      <div style="margin-top:8px;">
+        <button class="btn" id="saveBtn">저장</button>
+        <button class="btn secondary" id="cancelBtn">취소</button>
+      </div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--kiwi-cream-dark);" />
+      <h3>사용자명 변경</h3>
+      <p class="muted" id="nameNote">사용자명은 90일마다 변경 가능합니다.</p>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="edUsername" maxlength="40" style="margin:0;" />
+        <button class="btn brown" id="nameBtn">변경</button>
+      </div>
+      <p id="editError" style="color:var(--danger);margin-top:8px;"></p>
+    </div>
+    <p class="muted center" id="loginNote" style="display:none;">프로필을 보려면 로그인하세요. <a href="/index.html">로비로</a></p>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 프로필 · v9</footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/settings.js"></script>
+  <script src="/js/profile.js"></script>
+</body>
+</html>

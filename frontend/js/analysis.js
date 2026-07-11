@@ -14,17 +14,19 @@
   let reviewing = false;
   let startFen = new Chess().fen();
 
-  // 9단계 분류 (chess.com 스타일)
+  // 11단계 분류 (chess.com / 나무위키 표기)
   const CLASS_INFO = {
-    brilliant:  { ko: "탁월합니다", color: "#1bb7a6", icon: "!!", fx: true },
-    great:      { ko: "훌륭합니다", color: "#3aa0ff", icon: "!",  fx: true },
-    best:       { ko: "최고",       color: "#2e9b53", icon: "★" },
-    excellent:  { ko: "우수합니다", color: "#6aa329", icon: "✓" },
-    good:       { ko: "좋습니다",   color: "#9bbf5a", icon: "✓" },
-    book:       { ko: "이론",       color: "#a98b6a", icon: "📖" },
-    inaccuracy: { ko: "부정확함",   color: "#e0a526", icon: "?!" },
-    mistake:    { ko: "실수",       color: "#e07b39", icon: "?" },
-    blunder:    { ko: "블런더",     color: "#c0392b", icon: "??" },
+    brilliant:  { ko: "탁월한 수",     color: "#1bb7a6", icon: "!!", fx: true },
+    great:      { ko: "훌륭한 수",     color: "#3aa0ff", icon: "!",  fx: true },
+    best:       { ko: "최선의 수",     color: "#2e9b53", icon: "★" },
+    excellent:  { ko: "뛰어난 수",     color: "#5aa832", icon: "✓" },
+    good:       { ko: "좋은 수",       color: "#9bbf5a", icon: "✓" },
+    book:       { ko: "이론에 있는 수", color: "#a98b6a", icon: "📖" },
+    forced:     { ko: "강제",          color: "#8a97a6", icon: "=" },
+    inaccuracy: { ko: "부정확한 수",   color: "#e0a526", icon: "?!" },
+    mistake:    { ko: "실수",          color: "#e07b39", icon: "?" },
+    missed:     { ko: "놓친 수",       color: "#d96b8a", icon: "×" },
+    blunder:    { ko: "블런더",        color: "#c0392b", icon: "??" },
   };
   const BOOK_PLIES = 10;
   const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
@@ -219,18 +221,52 @@
     } catch (e) { return false; }
   }
 
-  // 승률(%) 하락 기반 분류 — 이기고 있는 국면일수록 자연스럽게 관대해짐
-  function classifyMove(i, drop, isBest, beforeWin, afterWin, moverColor, givesMate) {
-    if (!givesMate && i < BOOK_PLIES && drop <= 5 && Math.abs(beforeWin - 50) < 20) return "book";
-    if (givesMate) return isBest ? "best" : "excellent";
-    if (isBest && drop <= 2 && isSacrifice(i, moverColor, afterWin)) return "brilliant";
-    if (isBest && drop <= 1 && beforeWin >= 35 && beforeWin <= 65 && afterWin >= 48) return "great";
-    if (isBest || drop <= 1) return "best";
-    if (drop <= 3) return "excellent";
-    if (drop <= 7) return "good";
-    if (drop <= 12) return "inaccuracy";
-    if (drop <= 22) return "mistake";
-    return "blunder";
+  // 승률(%) 하락 기반 + 절대 물질 손실 가드로 분류
+  // drop: 승률 하락(%), cpDrop: 절대 센티폰 손실(mover 관점), legalCount: 합법수 개수,
+  // hadMate: 두기 전 mover가 강제 메이트 보유, gaveMate: 이 수로 mover가 외통
+  function classifyMove(ctx) {
+    const { i, drop, cpDrop, isBest, beforeWin, afterWin, moverColor, gaveMate, hadMate, legalCount } = ctx;
+
+    // 강제: 합법수가 하나뿐 (선택지가 없음) — 실력과 무관
+    if (legalCount === 1) return "forced";
+
+    // 이 수로 외통 → 최고/뛰어난 수
+    if (gaveMate) return isBest ? "best" : "excellent";
+
+    // 이론(오프닝): 초반 정상 수
+    if (i < BOOK_PLIES && drop <= 5 && cpDrop <= 60 && Math.abs(beforeWin - 50) < 20) return "book";
+
+    // 놓친 수: 강제 메이트가 있었는데 놓침 (여전히 안 지고 있으면)
+    if (hadMate && !gaveMate && afterWin >= 45) return "missed";
+    // 놓친 수: 확실히 이기고 있었는데(85%+) 큰 이점을 날림 — 단, 아직 안 짐
+    if (beforeWin >= 85 && drop >= 12 && afterWin >= 50) return "missed";
+
+    // 탁월/훌륭 (최선수일 때만)
+    if (isBest && drop <= 2 && cpDrop <= 40 && isSacrifice(i, moverColor, afterWin)) return "brilliant";
+    if (isBest && drop <= 1 && legalCount <= 3 && beforeWin >= 30 && beforeWin <= 70 && afterWin >= 45) return "great";
+
+    // 최선수면 최고 (엔진이 동의하므로 통하는 희생도 최고)
+    if (isBest) return "best";
+
+    // 승률 하락 기준 1차 등급
+    let tier;
+    if (drop <= 1) tier = "best";
+    else if (drop <= 3) tier = "excellent";
+    else if (drop <= 7) tier = "good";
+    else if (drop <= 12) tier = "inaccuracy";
+    else if (drop <= 22) tier = "mistake";
+    else tier = "blunder";
+
+    // 물질 손실 가드: 최선수가 아닌데 실질적 기물/이점을 내줬다면
+    // (매우 이기거나 지고 있어 승률 변화가 작아도) 최소 등급을 강제한다.
+    // → "이기고 있을 때 기물 헌납이 최고로 뜨는" 문제 방지
+    const RANK = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
+    function atLeast(t) { return RANK.indexOf(tier) < RANK.indexOf(t) ? t : tier; }
+    if (cpDrop >= 700) tier = atLeast("blunder");   // 룩+ 급 손실
+    else if (cpDrop >= 300) tier = atLeast("mistake"); // 마이너피스 급 손실
+    else if (cpDrop >= 150) tier = atLeast("inaccuracy");
+
+    return tier;
   }
 
   // 수당 정확도 (lichess CAPS 근사) → 게임 정확도 & 예상 ELO
@@ -280,10 +316,23 @@
       const beforeWin = moverWhite ? winPcts[i] : 100 - winPcts[i];
       const afterWin = moverWhite ? winPcts[i + 1] : 100 - winPcts[i + 1];
       const drop = Math.max(0, beforeWin - afterWin);
+      // 절대 센티폰 손실 (mover 관점, 메이트 왜곡 방지 위해 ±2000 로 제한)
+      const clamp = (x) => Math.max(-2000, Math.min(2000, x));
+      const beforeCpMover = clamp(moverWhite ? evals[i].cp : -evals[i].cp);
+      const afterCpMover = clamp(moverWhite ? evals[i + 1].cp : -evals[i + 1].cp);
+      const cpDrop = Math.max(0, beforeCpMover - afterCpMover);
       const bestUci = evals[i].best;
       const isBest = !!(bestUci && mainline[i].uci.slice(0, 4) === bestUci.slice(0, 4));
-      const givesMate = !!(evals[i + 1].terminal && Math.abs(evals[i + 1].cp) >= MATE);
-      const cls = classifyMove(i, drop, isBest, beforeWin, afterWin, moverWhite ? "w" : "b", givesMate);
+      const gaveMate = !!(evals[i + 1].terminal && Math.abs(evals[i + 1].cp) >= MATE);
+      // 두기 전 mover가 강제 메이트를 갖고 있었나 (백관점 cp가 mover쪽 MATE급)
+      const preCpMover = moverWhite ? evals[i].cp : -evals[i].cp;
+      const hadMate = preCpMover >= MATE - 5000;
+      let legalCount = 0;
+      try { legalCount = new Chess(fenAtPly(i)).moves().length; } catch (e) { legalCount = 2; }
+      const cls = classifyMove({
+        i, drop, cpDrop, isBest, beforeWin, afterWin,
+        moverColor: moverWhite ? "w" : "b", gaveMate, hadMate, legalCount,
+      });
       classifications[i] = cls;
       const side = moverWhite ? "white" : "black";
       counts[side][cls] = (counts[side][cls] || 0) + 1;
@@ -310,7 +359,7 @@
   }
 
   function renderSummary(counts, stats) {
-    const order = ["brilliant", "great", "best", "excellent", "good", "book", "inaccuracy", "mistake", "blunder"];
+    const order = ["brilliant", "great", "best", "excellent", "good", "book", "forced", "inaccuracy", "mistake", "missed", "blunder"];
     function row(side, label) {
       const st = stats[side];
       let head = `<b>${label}</b> — 정확도 <b>${st.accuracy.toFixed(1)}%</b>` +

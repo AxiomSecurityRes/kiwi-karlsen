@@ -8,12 +8,15 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from . import auth, bots, engine, friends, puzzles, streak
+from datetime import datetime, timedelta
+
 from .config import settings
 from .database import get_db, init_db
 from .models import DirectMessage, Friendship, Game, User
 from .realtime import server
-from .schemas import (BotMoveRequest, DMBody, FriendRequestBody, FriendRespondBody,
-                      LoginRequest, PuzzleSolvedRequest)
+from .schemas import (AdminUserUpdate, BotMoveRequest, DMBody, FriendRequestBody,
+                      FriendRespondBody, LoginRequest, ProfileUpdate,
+                      PuzzleSolvedRequest, UsernameChange)
 
 
 @asynccontextmanager
@@ -61,6 +64,14 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    if user.banned:
+        raise HTTPException(status_code=403, detail="정지된 계정입니다.")
+    return user
+
+
+def admin_user(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="관리자만 접근할 수 있습니다.")
     return user
 
 
@@ -72,6 +83,10 @@ def register(req: LoginRequest, db: Session = Depends(get_db)):
     user, err = auth.register(db, req.username, req.password)
     if err:
         raise HTTPException(status_code=400, detail=err)
+    # 첫 사용자 또는 지정된 관리자 이름이면 관리자 권한 부여
+    total_users = db.query(User).count()
+    if total_users == 1 or user.username.lower() == settings.ADMIN_USERNAME.lower():
+        user.is_admin = 1
     streak.update_streak(user)
     db.commit()
     token = auth.issue_token(user)
@@ -85,6 +100,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user, err = auth.login(db, req.username, req.password)
     if err:
         raise HTTPException(status_code=401, detail=err)
+    if user.banned:
+        raise HTTPException(status_code=403, detail="정지된 계정입니다.")
+    # 지정된 관리자 이름이면 로그인 시에도 관리자 보장
+    if user.username.lower() == settings.ADMIN_USERNAME.lower() and not user.is_admin:
+        user.is_admin = 1
     streak.update_streak(user)
     db.commit()
     token = auth.issue_token(user)
@@ -259,6 +279,128 @@ def game_detail(game_id: int, user: User = Depends(current_user), db: Session = 
     d = g.summary_dict()
     d["pgn"] = g.pgn
     return d
+
+
+# ---------- 프로필 ----------
+@app.get("/api/profile/me")
+def profile_me(user: User = Depends(current_user)):
+    return {"profile": user.public_dict(), "canChangeName": _can_change_username(user)}
+
+
+def _can_change_username(user: User) -> bool:
+    if not user.username_changed_at:
+        return True
+    return datetime.utcnow() - user.username_changed_at >= timedelta(days=90)
+
+
+@app.post("/api/profile")
+def profile_update(req: ProfileUpdate, user: User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    if req.first_name is not None: user.first_name = req.first_name.strip()[:40]
+    if req.last_name is not None: user.last_name = req.last_name.strip()[:40]
+    if req.location is not None: user.location = req.location.strip()[:80]
+    if req.country is not None: user.country = req.country.strip()[:40]
+    if req.bio is not None: user.bio = req.bio.strip()[:1000]
+    if req.otb_rating is not None: user.otb_rating = int(req.otb_rating)
+    db.commit()
+    return {"ok": True, "profile": user.public_dict()}
+
+
+@app.post("/api/profile/username")
+def profile_username(req: UsernameChange, user: User = Depends(current_user),
+                     db: Session = Depends(get_db)):
+    new = req.new_username.strip()
+    if not _can_change_username(user):
+        nextd = (user.username_changed_at + timedelta(days=90)).date().isoformat()
+        raise HTTPException(status_code=400, detail=f"사용자명은 90일마다 변경 가능합니다. ({nextd} 이후)")
+    if db.query(User).filter(User.username.ilike(new), User.id != user.id).first():
+        raise HTTPException(status_code=400, detail="이미 사용 중인 사용자명입니다.")
+    user.username = new
+    user.username_changed_at = datetime.utcnow()
+    db.commit()
+    # 사용자명이 바뀌면 토큰 재발급
+    return {"ok": True, "token": auth.issue_token(user), "profile": user.public_dict()}
+
+
+@app.get("/api/profile/{username}")
+def profile_view(username: str, db: Session = Depends(get_db)):
+    u = db.query(User).filter(User.username.ilike(username)).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    games = db.query(Game).filter(
+        (Game.white_id == u.id) | (Game.black_id == u.id)
+    ).order_by(Game.id.desc()).limit(10).all()
+    return {"profile": u.public_dict(), "recentGames": [g.summary_dict() for g in games]}
+
+
+# ---------- 관리자 ----------
+@app.get("/api/admin/stats")
+def admin_stats(admin: User = Depends(admin_user), db: Session = Depends(get_db)):
+    from .models import DirectMessage, Friendship
+    return {
+        "users": db.query(User).count(),
+        "admins": db.query(User).filter(User.is_admin == 1).count(),
+        "banned": db.query(User).filter(User.banned == 1).count(),
+        "games": db.query(Game).count(),
+        "friendships": db.query(Friendship).filter(Friendship.status == "accepted").count(),
+        "messages": db.query(DirectMessage).count(),
+        "puzzles": puzzles.count(),
+        "online": len(server.online),
+        "version": settings.VERSION,
+    }
+
+
+@app.get("/api/admin/users")
+def admin_users(q: str = Query(default=""), admin: User = Depends(admin_user),
+                db: Session = Depends(get_db)):
+    query = db.query(User)
+    if q.strip():
+        query = query.filter(User.username.ilike(f"%{q.strip()}%"))
+    rows = query.order_by(User.id.desc()).limit(200).all()
+    return {"users": [{
+        "id": u.id, "username": u.username, "rating": round(u.rating),
+        "games": u.wins + u.losses + u.draws, "isAdmin": bool(u.is_admin),
+        "banned": bool(u.banned), "createdAt": u.created_at.isoformat() if u.created_at else "",
+    } for u in rows]}
+
+
+@app.post("/api/admin/user/{user_id}")
+def admin_update_user(user_id: int, req: AdminUserUpdate,
+                      admin: User = Depends(admin_user), db: Session = Depends(get_db)):
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if req.rating is not None:
+        u.rating = float(req.rating)
+    if req.is_admin is not None:
+        if u.id == admin.id and not req.is_admin:
+            raise HTTPException(status_code=400, detail="자신의 관리자 권한은 해제할 수 없습니다.")
+        u.is_admin = 1 if req.is_admin else 0
+    if req.banned is not None:
+        if u.id == admin.id and req.banned:
+            raise HTTPException(status_code=400, detail="자신을 정지할 수 없습니다.")
+        u.banned = 1 if req.banned else 0
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/admin/user/{user_id}")
+def admin_delete_user(user_id: int, admin: User = Depends(admin_user),
+                      db: Session = Depends(get_db)):
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    if u.id == admin.id:
+        raise HTTPException(status_code=400, detail="자신은 삭제할 수 없습니다.")
+    db.delete(u)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/admin/reload_puzzles")
+def admin_reload_puzzles(admin: User = Depends(admin_user)):
+    puzzles.load_puzzles()
+    return {"ok": True, "puzzles": puzzles.count()}
 
 
 # ---------- WebSocket ----------

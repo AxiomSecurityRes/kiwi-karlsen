@@ -26,6 +26,19 @@ class User(Base):
     streak_best = Column(Integer, default=0, nullable=False)
     streak_last = Column(String(10), default="", nullable=False)  # 'YYYY-MM-DD'
 
+    # 프로필
+    first_name = Column(String(40), default="", nullable=False)
+    last_name = Column(String(40), default="", nullable=False)
+    location = Column(String(80), default="", nullable=False)
+    country = Column(String(40), default="", nullable=False)
+    bio = Column(Text, default="", nullable=False)
+    otb_rating = Column(Integer, default=0, nullable=False)
+    username_changed_at = Column(DateTime, nullable=True)
+
+    # 관리자 / 제재
+    is_admin = Column(Integer, default=0, nullable=False)  # 0/1
+    banned = Column(Integer, default=0, nullable=False)    # 0/1
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     def public_dict(self) -> dict:
@@ -40,6 +53,14 @@ class User(Base):
             "games": self.wins + self.losses + self.draws,
             "streakCurrent": self.streak_current,
             "streakBest": self.streak_best,
+            "firstName": self.first_name,
+            "lastName": self.last_name,
+            "location": self.location,
+            "country": self.country,
+            "bio": self.bio,
+            "otbRating": self.otb_rating,
+            "isAdmin": bool(self.is_admin),
+            "createdAt": self.created_at.isoformat() if self.created_at else "",
         }
 
 

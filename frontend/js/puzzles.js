@@ -14,6 +14,14 @@
   let solvedCount = 0;
   let failCount = 0;
 
+  let themesRevealed = false;
+  function revealThemes() {
+    if (themesRevealed || !puzzle) return;
+    themesRevealed = true;
+    const raw = (puzzle.themes || "").trim();
+    $("puzzleThemes").textContent = raw ? raw : "-";
+  }
+
   function setStatus(text, color) {
     const el = $("puzzleStatus");
     el.textContent = text;
@@ -85,7 +93,9 @@
 
     $("puzzleId").textContent = puzzle.id;
     $("puzzleRating").textContent = puzzle.rating;
-    $("puzzleThemes").textContent = puzzle.themes || "-";
+    // 테마는 힌트/정답/해결 전까지 숨긴다 (미리 보면 스포일러)
+    themesRevealed = false;
+    $("puzzleThemes").textContent = "❓ (힌트·정답·해결 시 공개)";
     $("puzzleTurn").textContent = solverColor === "w" ? "백 (White)" : "흑 (Black)";
 
     if (board) board.destroy();
@@ -191,6 +201,7 @@
 
   function finishSolved() {
     solved = true;
+    revealThemes();
     solvedCount++;
     $("solvedCount").textContent = solvedCount;
     setStatus("✅ 퍼즐 성공! 잘하셨어요. 🥝", "var(--kiwi-green-dark)");
@@ -200,6 +211,7 @@
 
   function showHint() {
     if (solved || failed || !puzzle) return;
+    revealThemes();
     const expected = puzzle.moves[solutionIndex];
     if (!expected) return;
     const from = expected.slice(0, 2);
@@ -214,6 +226,7 @@
 
   function showSolution() {
     if (solved || shown || !puzzle) return;
+    revealThemes();
     shown = true;
     setStatus("👁️ 정답을 재생합니다…", "var(--gold)");
     function step() {

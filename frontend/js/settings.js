@@ -108,8 +108,21 @@ const KiwiSettings = (() => {
     $("ksFx").addEventListener("change", (e) => set("celebrateFx", e.target.checked));
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { injectUI(); apply(); });
-  else { injectUI(); apply(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { injectUI(); apply(); revealAdmin(); });
+  else { injectUI(); apply(); revealAdmin(); }
+
+  // 관리자면 상단 '관리자' 링크 표시 (모든 페이지 공통)
+  function revealAdmin() {
+    try {
+      const link = document.getElementById("adminNavLink");
+      if (!link || !window.API || !API.getToken()) return;
+      const u = API.getUser && API.getUser();
+      if (u && u.isAdmin) { link.classList.remove("hidden"); return; }
+      API.profileMe().then((r) => {
+        if (r && r.profile && r.profile.isAdmin) link.classList.remove("hidden");
+      }).catch(() => {});
+    } catch (e) {}
+  }
 
   return { get, set };
 })();
