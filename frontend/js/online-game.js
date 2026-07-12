@@ -325,7 +325,7 @@
     lastOpeningKey = key;
     try {
       const data = await API.openings(hist);
-      if (data && data.opening) el.textContent = `📖 ${data.opening.en} (${data.opening.eco})`;
+      if (data && data.opening) el.textContent = `📖 ${data.opening.name} (${data.opening.eco})`;
     } catch (e) { /* noop */ }
   }
 
@@ -345,7 +345,7 @@
 
   $("resultReview").addEventListener("click", () => {
     try { if (game) localStorage.setItem("kiwi_review_pgn", game.pgn()); } catch (e) {}
-    location.href = "/analysis.html";
+    location.href = window.kiwiPageUrl ? window.kiwiPageUrl("/analysis.html") : "/analysis.html";
   });
 
   // ---- 소켓 이벤트 ----

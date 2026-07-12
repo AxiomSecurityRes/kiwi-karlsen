@@ -74,13 +74,13 @@
       const data = await API.openings(history);
       const op = data.opening;
       if (op) {
-        $("opName").textContent = op.en;
-        $("opEco").textContent = `${op.eco} · ${op.ko}`;
+        $("opName").textContent = op.name;
+        $("opEco").textContent = `${op.eco} · ${op.moves.join(" ")}`;
       } else {
         $("opName").textContent = history.length ? "정석에서 벗어남" : "시작 국면";
         $("opEco").textContent = history.length
           ? "이 수순은 등록된 오프닝에 없습니다."
-          : `오프닝 ${data.total}종 수록 — 아래에서 첫 수를 골라보세요.`;
+          : `오프닝 ${data.total.toLocaleString()}종 · 정석 국면 ${(data.positions || 0).toLocaleString()}개 수록`;
       }
 
       const box = $("opNext");
@@ -132,7 +132,7 @@
       if (!results.length) { box.innerHTML = '<p class="muted">검색 결과가 없습니다.</p>'; return; }
       box.innerHTML = results.map((r, i) => `
         <div class="player-row op-result" data-idx="${i}">
-          <span class="name">${esc(r.en)}</span>
+          <span class="name">${esc(r.name)}</span>
           <span class="rating">${esc(r.eco)}</span>
         </div>`).join("");
       box.querySelectorAll(".op-result").forEach((row) => {

@@ -1,3 +1,11 @@
+/* 앱 버전 — 캐시된 옛 페이지로 이동하지 않도록 링크에 붙인다.
+   (scripts/bump_version.py 가 자동 갱신) */
+window.KIWI_VERSION = "19";
+window.kiwiPageUrl = function (page) {
+  const p = String(page).replace(/^\/*/, "/");
+  return p + (p.indexOf("?") === -1 ? "?v=" : "&v=") + window.KIWI_VERSION;
+};
+
 /* 전역 XSS 방어 유틸 — 모든 페이지에서 사용 (api.js 는 전 페이지에 로드됨) */
 window.kiwiEscapeHtml = function (value) {
   if (value === null || value === undefined) return "";
@@ -122,6 +130,8 @@ const API = (() => {
     puzzleLeaderboard: () => request("/api/puzzles/leaderboard"),
     openings: (moves) => request("/api/openings" + (moves && moves.length ? "?moves=" + encodeURIComponent(moves.join(",")) : "")),
     openingsSearch: (q) => request("/api/openings/search?q=" + encodeURIComponent(q)),
+    openingsBook: (moves) =>
+      request("/api/openings/book", { method: "POST", body: JSON.stringify({ moves }) }),
     achievements: () => request("/api/achievements"),
     achievementsOf: (username) => request("/api/achievements/" + encodeURIComponent(username)),
     notifications: () => request("/api/notifications"),

@@ -548,12 +548,27 @@ def openings_explore(moves: str = Query(default="")):
         "opening": current,
         "continuations": openings.continuations(seq),
         "total": openings.count(),
+        "positions": openings.position_count(),
     }
 
 
 @app.get("/api/openings/search")
 def openings_search(q: str = Query(default="")):
     return {"results": openings.search(q)}
+
+
+@app.post("/api/openings/book")
+def openings_book(body: dict):
+    """게임 리뷰용 — 각 수가 '이론(정석)'인지 판정.
+
+    body: {"moves": ["e4","e5","Nf3", ...]}  (SAN)
+    반환: {"book": [true, true, false, ...]}  수마다 이론 여부
+    """
+    moves = body.get("moves") or []
+    if not isinstance(moves, list) or len(moves) > 300:
+        raise HTTPException(status_code=400, detail="잘못된 수순입니다.")
+    moves = [str(m)[:8] for m in moves]
+    return {"book": openings.book_flags(moves), "positions": openings.position_count()}
 
 
 # ---------- 업적 ----------

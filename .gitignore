@@ -7,5 +7,11 @@ __pycache__/
 venv/
 node_modules/
 .DS_Store
-frontend/assets/engine/stockfish.js
-frontend/assets/engine/*.wasm
+
+# 거대 NNUE 신경망만 제외 (Stockfish 10 고전 평가는 번들됨)
+*.nnue
+
+p.csv
+p.csv.zst
+*.zst
+lichess_db_puzzle*

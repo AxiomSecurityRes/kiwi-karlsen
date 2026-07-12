@@ -13,6 +13,7 @@
   let winPcts = [];              // winPcts[i] = 백 승률 %
   let reviewing = false;
   let startFen = new Chess().fen();
+  let lastDepth = 0;
 
   // 11단계 분류 (chess.com / 나무위키 표기)
   const CLASS_INFO = {
@@ -125,7 +126,8 @@
     // 리뷰 완료 상태면 저장된 평가 재사용 (재계산 없음 → 즉시)
     if (evals.length === mainline.length + 1 && evals[ply]) {
       const e = evals[ply];
-      $("evalText").textContent = "평가: " + scoreToText(e.cp) + (e.best ? "   최선수: " + e.best : "");
+      const d = e.depth ? `  (depth ${e.depth})` : "";
+      $("evalText").textContent = "평가: " + scoreToText(e.cp) + d + (e.best ? "   최선수: " + e.best : "");
       renderEvalBar(e.cp);
       return;
     }
@@ -139,8 +141,11 @@
       if (ev && ev.mate != null) cp = ev.mate > 0 ? MATE - ev.mate * 100 : -MATE - ev.mate * 100;
       else cp = (ev && ev.score != null) ? ev.score : 0;
       best = ev && ev.best;
+      lastDepth = (ev && ev.depth) || 0;
     }
-    $("evalText").textContent = "평가: " + scoreToText(cp) + (best ? "   최선수: " + best : "");
+    const depthTxt = lastDepth ? `  (depth ${lastDepth})` : "";
+    $("evalText").textContent =
+      "평가: " + scoreToText(cp) + depthTxt + (best ? "   최선수: " + best : "");
     renderEvalBar(cp);
     if (best && ply === mainline.length) $("bestLine").textContent = "엔진 추천: " + best;
   }
@@ -239,7 +244,8 @@
   // drop: 승률 하락(%), cpDrop: 절대 센티폰 손실(mover 관점), legalCount: 합법수 개수,
   // hadMate: 두기 전 mover가 강제 메이트 보유, gaveMate: 이 수로 mover가 외통
   function classifyMove(ctx) {
-    const { i, drop, cpDrop, isBest, beforeWin, afterWin, moverColor, gaveMate, hadMate, legalCount } = ctx;
+    const { i, drop, cpDrop, isBest, beforeWin, afterWin, moverColor,
+            gaveMate, hadMate, stillMate, legalCount, isBook } = ctx;
 
     // 강제: 합법수가 하나뿐 (선택지가 없음) — 실력과 무관
     if (legalCount === 1) return "forced";
@@ -247,13 +253,15 @@
     // 이 수로 외통 → 최고/뛰어난 수
     if (gaveMate) return isBest ? "best" : "excellent";
 
-    // 이론(오프닝): 초반 정상 수
-    if (i < BOOK_PLIES && drop <= 5 && cpDrop <= 60 && Math.abs(beforeWin - 50) < 20) return "book";
+    // 이론(오프닝): 오프닝 DB(3,800종)에 있는 국면이면 무조건 이론
+    // — 평가 엔진이 부정확해도 Italian Game 같은 정석이 '부정확함'으로 찍히지 않는다.
+    if (isBook) return "book";
 
-    // 놓친 수: 강제 메이트가 있었는데 놓침 (여전히 안 지고 있으면)
-    if (hadMate && !gaveMate && afterWin >= 45) return "missed";
+    // 놓친 수: 강제 메이트를 갖고 있었는데 **메이트 기회를 날린** 경우만.
+    //   메이트 수순대로 잘 두고 있으면(M3 → M2) 여전히 메이트이므로 놓친 수가 아니다.
+    if (hadMate && !gaveMate && !stillMate && afterWin >= 45) return "missed";
     // 놓친 수: 확실히 이기고 있었는데(85%+) 큰 이점을 날림 — 단, 아직 안 짐
-    if (beforeWin >= 85 && drop >= 12 && afterWin >= 50) return "missed";
+    if (beforeWin >= 85 && drop >= 12 && afterWin >= 50 && !stillMate) return "missed";
 
     // 탁월/훌륭 (최선수일 때만)
     if (isBest && drop <= 2 && cpDrop <= 40 && isSacrifice(i, moverColor, afterWin)) return "brilliant";
@@ -317,10 +325,18 @@
       let cp;
       if (ev && ev.mate != null) cp = ev.mate > 0 ? MATE - ev.mate * 100 : -MATE - ev.mate * 100;
       else cp = (ev && ev.score != null) ? ev.score : 0;
-      evals[idxToEval[k]] = { cp, best: ev && ev.best, terminal: false };
+      evals[idxToEval[k]] = { cp, best: ev && ev.best, terminal: false, depth: (ev && ev.depth) || 0 };
     });
 
-    // 2) 승률 및 분류
+    // 2) 이론(정석) 판정 — 오프닝 DB 기준
+    let bookFlags = new Array(N).fill(false);
+    try {
+      const sans = mainline.map((m) => m.san);
+      const r = await API.openingsBook(sans);
+      if (r && Array.isArray(r.book)) bookFlags = r.book;
+    } catch (e) { /* 서버 조회 실패 시 이론 판정 없이 진행 */ }
+
+    // 3) 승률 및 분류
     winPcts = evals.map((e) => cpToWinPct(e.cp));
     classifications = new Array(N).fill(null);
     const counts = { white: {}, black: {} };
@@ -338,14 +354,19 @@
       const bestUci = evals[i].best;
       const isBest = !!(bestUci && mainline[i].uci.slice(0, 4) === bestUci.slice(0, 4));
       const gaveMate = !!(evals[i + 1].terminal && Math.abs(evals[i + 1].cp) >= MATE);
-      // 두기 전 mover가 강제 메이트를 갖고 있었나 (백관점 cp가 mover쪽 MATE급)
+      // 두기 전 mover가 강제 메이트를 갖고 있었나 (mover 관점)
       const preCpMover = moverWhite ? evals[i].cp : -evals[i].cp;
+      const postCpMover = moverWhite ? evals[i + 1].cp : -evals[i + 1].cp;
       const hadMate = preCpMover >= MATE - 5000;
+      // 이 수를 둔 뒤에도 여전히 강제 메이트가 남아 있는가 (메이트 수순 진행 중)
+      const stillMate = postCpMover >= MATE - 5000;
       let legalCount = 0;
       try { legalCount = new Chess(fenAtPly(i)).moves().length; } catch (e) { legalCount = 2; }
       const cls = classifyMove({
         i, drop, cpDrop, isBest, beforeWin, afterWin,
-        moverColor: moverWhite ? "w" : "b", gaveMate, hadMate, legalCount,
+        moverColor: moverWhite ? "w" : "b",
+        gaveMate, hadMate, stillMate, legalCount,
+        isBook: !!bookFlags[i],
       });
       classifications[i] = cls;
       const side = moverWhite ? "white" : "black";
@@ -514,8 +535,18 @@
   (async function init() {
     buildBoard("start");
     renderMoves();
-    await Engine.init();
-    $("engineMode").textContent = "엔진: " + Engine.describe();
+    const strong = await Engine.init();
+    const em = $("engineMode");
+    if (strong) {
+      em.textContent = "엔진: " + Engine.describe();
+      em.classList.remove("engine-warn");
+    } else {
+      em.innerHTML =
+        "⚠️ <b>Stockfish 엔진이 없어 평가가 부정확합니다.</b><br>" +
+        "정확한 분석·게임 리뷰를 하려면 <code>frontend/assets/engine/stockfish.js</code> 를 추가하세요. " +
+        "(현재: " + window.kiwiEscapeHtml(Engine.describe()) + ")";
+      em.classList.add("engine-warn");
+    }
     $("evalText").textContent = "기물을 움직여 분석을 시작하세요.";
     let stored = null;
     try { stored = localStorage.getItem("kiwi_review_pgn"); } catch (e) {}

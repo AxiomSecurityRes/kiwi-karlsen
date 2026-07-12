@@ -49,9 +49,22 @@ def main() -> int:
         # 버전 감시기가 비교하는 메타 태그
         html = re.sub(r'(<meta name="kiwi-version" content=")\d+(" />)',
                       rf'\g<1>{num}\g<2>', html)
+        # 내비게이션 링크 (캐시된 옛 페이지로 이동하지 않도록)
+        for page in ("index", "play", "puzzles", "openings", "analysis", "profile", "admin"):
+            html = re.sub(rf'href="/{page}\.html(\?v=\d+)?"', f'href="/{page}.html?v={num}"', html)
         if html != orig:
             open(path, "w", encoding="utf-8").write(html)
             print(f"  {name:18} → ?v={num}, 푸터 {ver}")
+
+    # api.js 의 KIWI_VERSION (JS 안에서 만드는 링크용)
+    api_path = os.path.join(front, "js", "api.js")
+    if os.path.exists(api_path):
+        api = open(api_path, encoding="utf-8").read()
+        new_api, k = re.subn(r'window\.KIWI_VERSION = "\d+";',
+                             f'window.KIWI_VERSION = "{num}";', api)
+        if k:
+            open(api_path, "w", encoding="utf-8").write(new_api)
+            print(f"  api.js             → KIWI_VERSION = {num}")
 
     print(f"\n완료. 이제 커밋 후 푸시하세요:")
     print(f'  git add . && git commit -m "{ver}" && git push')

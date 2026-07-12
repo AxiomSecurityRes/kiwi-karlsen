@@ -2,26 +2,26 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="kiwi-version" content="18" />
+  <meta name="kiwi-version" content="19" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>프로필 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
-  <link rel="stylesheet" href="/css/style.css?v=18" />
-  <script src="/js/theme.js?v=18"></script>
-  <script src="/js/version-check.js?v=18"></script>
+  <link rel="stylesheet" href="/css/style.css?v=19" />
+  <script src="/js/theme.js?v=19"></script>
+  <script src="/js/version-check.js?v=19"></script>
 </head>
 <body>
   <header class="topbar">
     <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
     <div class="brand">Kiwi Karlsen<small>.com</small></div>
     <nav>
-      <a href="/index.html">로비</a>
-      <a href="/play.html">봇 대국</a>
-      <a href="/puzzles.html">퍼즐</a>
-      <a href="/openings.html">오프닝</a>
-      <a href="/analysis.html">분석</a>
-      <a href="/profile.html" class="active">프로필</a>
-      <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
+      <a href="/index.html?v=19">로비</a>
+      <a href="/play.html?v=19">봇 대국</a>
+      <a href="/puzzles.html?v=19">퍼즐</a>
+      <a href="/openings.html?v=19">오프닝</a>
+      <a href="/analysis.html?v=19">분석</a>
+      <a href="/profile.html?v=19" class="active">프로필</a>
+      <a href="/admin.html?v=19" id="adminNavLink" class="hidden">관리자</a>
     </nav>
   </header>
 
@@ -33,12 +33,16 @@
           <h2 id="pfUsername" style="margin:0;">-</h2>
           <p class="muted" id="pfRealname" style="margin:2px 0;"></p>
           <p class="muted" id="pfMeta" style="margin:2px 0;"></p>
+          <p id="pfRecord" class="record-line"></p>
         </div>
       </div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:14px;">
         <div class="stat-box"><div class="stat-num" id="pfRating">-</div><div class="stat-label">레이팅</div></div>
         <div class="stat-box"><div class="stat-num" id="pfGames">-</div><div class="stat-label">게임</div></div>
         <div class="stat-box"><div class="stat-num" id="pfWins">-</div><div class="stat-label">승</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfLosses">-</div><div class="stat-label">패</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfDraws">-</div><div class="stat-label">무</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfWinRate">-</div><div class="stat-label">승률</div></div>
         <div class="stat-box"><div class="stat-num" id="pfStreak">-</div><div class="stat-label">🔥 스트릭</div></div>
         <div class="stat-box"><div class="stat-num" id="pfOtb">-</div><div class="stat-label">OTB</div></div>
         <div class="stat-box"><div class="stat-num" id="pfPuzzle">-</div><div class="stat-label">🧩 퍼즐</div></div>
@@ -93,14 +97,14 @@
       </div>
       <p id="editError" style="color:var(--danger);margin-top:8px;"></p>
     </div>
-    <p class="muted center" id="loginNote" style="display:none;">프로필을 보려면 로그인하세요. <a href="/index.html">로비로</a></p>
+    <p class="muted center" id="loginNote" style="display:none;">프로필을 보려면 로그인하세요. <a href="/index.html?v=19">로비로</a></p>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 프로필 · v18</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 프로필 · v19</footer>
 
-  <script src="/js/api.js?v=18"></script>
-  <script src="/js/settings.js?v=18"></script>
-  <script src="/js/notifications.js?v=18"></script>
-  <script src="/js/profile.js?v=18"></script>
+  <script src="/js/api.js?v=19"></script>
+  <script src="/js/settings.js?v=19"></script>
+  <script src="/js/notifications.js?v=19"></script>
+  <script src="/js/profile.js?v=19"></script>
 </body>
 </html>

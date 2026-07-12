@@ -18,6 +18,14 @@
     $("pfRating").textContent = p.rating;
     $("pfGames").textContent = p.games;
     $("pfWins").textContent = p.wins;
+    $("pfLosses").textContent = p.losses;
+    $("pfDraws").textContent = p.draws;
+    const decided = (p.wins || 0) + (p.losses || 0) + (p.draws || 0);
+    const rate = decided ? Math.round(((p.wins + (p.draws || 0) * 0.5) / decided) * 100) : 0;
+    $("pfWinRate").textContent = decided ? rate + "%" : "-";
+    $("pfRecord").innerHTML = decided
+      ? `<b class="rec-w">${p.wins}승</b> · <b class="rec-l">${p.losses}패</b> · <b class="rec-d">${p.draws}무</b>`
+      : '<span class="muted">아직 대국 기록이 없습니다.</span>';
     $("pfStreak").textContent = p.streakCurrent || 0;
     $("pfOtb").textContent = p.otbRating || "-";
     $("pfPuzzle").textContent = p.puzzleRating != null ? p.puzzleRating : "-";

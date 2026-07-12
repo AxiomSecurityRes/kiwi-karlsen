@@ -302,7 +302,7 @@
   $("botResultOk").addEventListener("click", newGame);
   $("botResultReview").addEventListener("click", () => {
     try { if (game) localStorage.setItem("kiwi_review_pgn", game.pgn()); } catch (e) {}
-    location.href = "/analysis.html";
+    location.href = window.kiwiPageUrl ? window.kiwiPageUrl("/analysis.html") : "/analysis.html";
   });
 
   function escapeHtml(s) {

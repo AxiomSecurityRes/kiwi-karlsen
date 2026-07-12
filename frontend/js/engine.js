@@ -8,7 +8,7 @@ const Engine = (() => {
   let initTried = false;
   let pendingResolve = null;
   let pendingEval = null;
-  let lastEval = { score: null, mate: null, best: null };
+  let lastEval = { score: null, mate: null, best: null, depth: 0 };
   let mode = "내장 JS 엔진";
 
   function setting(key, dflt) {
@@ -44,9 +44,11 @@ const Engine = (() => {
           const cpM = line.match(/score cp (-?\d+)/);
           const mateM = line.match(/score mate (-?\d+)/);
           const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          const dM = line.match(/ depth (\d+)/);
           if (cpM) { lastEval.score = parseInt(cpM[1], 10); lastEval.mate = null; }
           if (mateM) { lastEval.mate = parseInt(mateM[1], 10); lastEval.score = null; }
           if (pvM) { lastEval.best = pvM[1]; }
+          if (dM) { lastEval.depth = parseInt(dM[1], 10); }
         } else if (line.startsWith("bestmove")) {
           const mv = line.split(" ")[1];
           if (pendingEval) {
@@ -98,8 +100,36 @@ const Engine = (() => {
     return score;
   }
 
+  // 정지 탐색(quiescence): 교환이 끝날 때까지 잡는 수만 더 본다.
+  // 이게 없으면 매 수마다 평가가 ±1.00 씩 요동친다(수평선 효과).
+  function quiesce(g, alpha, beta, color, depth) {
+    const standPat = color * staticEval(g);
+    if (depth <= 0) return standPat;
+    if (standPat >= beta) return beta;
+    if (standPat > alpha) alpha = standPat;
+
+    // 잡는 수 + 승급만 검토 (조용한 국면이면 즉시 종료)
+    const caps = g.moves({ verbose: true }).filter((m) => m.captured || m.promotion);
+    if (!caps.length) return standPat;
+    // 큰 기물을 잡는 수부터 (MVV 정렬)
+    const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+    caps.sort((a, b) => (VAL[b.captured] || 0) - (VAL[a.captured] || 0));
+
+    for (const m of caps) {
+      g.move(m);
+      const val = -quiesce(g, -beta, -alpha, -color, depth - 1);
+      g.undo();
+      if (val >= beta) return beta;
+      if (val > alpha) alpha = val;
+    }
+    return alpha;
+  }
+
   function negamax(g, depth, alpha, beta, color) {
-    if (depth === 0 || g.game_over()) return color * staticEval(g);
+    if (g.game_over()) return color * staticEval(g);
+    // 깊이를 다 쓰면 정지 탐색으로 넘긴다(교환 도중에 끊기지 않도록)
+    if (depth === 0) return quiesce(g, alpha, beta, color, 6);
+
     let best = -Infinity;
     const moves = g.moves({ verbose: true }).sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
     for (const m of moves) {
@@ -190,9 +220,13 @@ const Engine = (() => {
   function jsEval(fen, depth) {
     const g = new Chess(fen);
     if (g.in_checkmate()) return { score: null, mate: g.turn() === "w" ? -1 : 1, best: null };
+    if (g.in_stalemate() || g.in_draw()) return { score: 0, mate: null, best: null };
     const legal = g.moves({ verbose: true });
     if (!legal.length) return { score: 0, mate: null, best: null };
-    const ranked = rankMoves(fen, Math.max(1, depth - 1));
+    // 깊이를 짝수로 맞춰(양쪽이 같은 횟수만큼 두도록) 홀짝 편향을 없앤다.
+    // 각 후보 수를 둔 뒤 남은 깊이를 홀수로 주면 상대 응수까지 계산된다.
+    const d = Math.max(1, (depth | 0));
+    const ranked = rankMoves(fen, d);
     return { score: Math.round(ranked[0].score), mate: null, best: ranked[0].uci, moverPOV: true };
   }
 
@@ -200,7 +234,7 @@ const Engine = (() => {
     const movetime = setting("evalMovetime", 400);
     const turn = fen.split(" ")[1] === "b" ? -1 : 1;
     if (ready) {
-      lastEval = { score: null, mate: null, best: null };
+      lastEval = { score: null, mate: null, best: null, depth: 0 };
       const r = await new Promise((resolve) => {
         pendingEval = resolve;
         worker.postMessage("setoption name UCI_LimitStrength value false");
@@ -210,7 +244,7 @@ const Engine = (() => {
         setTimeout(() => { if (pendingEval) { const x = pendingEval; pendingEval = null; x({ ...lastEval }); } }, movetime + 3000);
       });
       if (r) {
-        const out = { best: r.best, score: null, mate: null };
+        const out = { best: r.best, score: null, mate: null, depth: r.depth || 0, engine: "stockfish" };
         if (r.mate != null) out.mate = turn === 1 ? r.mate : -r.mate;
         else if (r.score != null) out.score = turn === 1 ? r.score : -r.score;
         return out;
@@ -218,6 +252,8 @@ const Engine = (() => {
     }
     const r = jsEval(fen, 3);
     if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
+    r.depth = 3;
+    r.engine = "js";
     return r;
   }
 
@@ -240,7 +276,7 @@ const Engine = (() => {
 
   function evalOnWorker(w, fen, movetime) {
     return new Promise((resolve) => {
-      const ev = { score: null, mate: null, best: null };
+      const ev = { score: null, mate: null, best: null, depth: 0 };
       const to = setTimeout(() => { w.onmessage = null; resolve(ev); }, movetime + 3000);
       w.onmessage = (e) => {
         const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
@@ -248,9 +284,11 @@ const Engine = (() => {
           const cpM = line.match(/score cp (-?\d+)/);
           const mateM = line.match(/score mate (-?\d+)/);
           const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          const dM = line.match(/ depth (\d+)/);
           if (cpM) { ev.score = parseInt(cpM[1], 10); ev.mate = null; }
           if (mateM) { ev.mate = parseInt(mateM[1], 10); ev.score = null; }
           if (pvM) ev.best = pvM[1];
+          if (dM) ev.depth = parseInt(dM[1], 10);
         } else if (line.startsWith("bestmove")) {
           clearTimeout(to); w.onmessage = null;
           const mv = line.split(" ")[1];
@@ -271,7 +309,7 @@ const Engine = (() => {
 
     function toWhitePOV(fen, ev) {
       const turn = fen.split(" ")[1] === "b" ? -1 : 1;
-      const out = { best: ev.best, score: null, mate: null };
+      const out = { best: ev.best, score: null, mate: null, depth: ev.depth || 0 };
       if (ev.mate != null) out.mate = turn === 1 ? ev.mate : -ev.mate;
       else if (ev.score != null) out.score = turn === 1 ? ev.score : -ev.score;
       return out;
