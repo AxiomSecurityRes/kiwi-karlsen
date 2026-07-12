@@ -46,6 +46,9 @@ def main() -> int:
         html = re.sub(r'(src="/js/[\w.-]+\.js)(\?v=\d+)?"', rf'\1?v={num}"', html)
         html = re.sub(r'(href="/css/[\w.-]+\.css)(\?v=\d+)?"', rf'\1?v={num}"', html)
         html = re.sub(r'· v\d+<', f'· {ver}<', html)
+        # 버전 감시기가 비교하는 메타 태그
+        html = re.sub(r'(<meta name="kiwi-version" content=")\d+(" />)',
+                      rf'\g<1>{num}\g<2>', html)
         if html != orig:
             open(path, "w", encoding="utf-8").write(html)
             print(f"  {name:18} → ?v={num}, 푸터 {ver}")

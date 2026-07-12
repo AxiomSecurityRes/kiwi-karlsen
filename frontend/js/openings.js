@@ -78,7 +78,9 @@
         $("opEco").textContent = `${op.eco} · ${op.ko}`;
       } else {
         $("opName").textContent = history.length ? "정석에서 벗어남" : "시작 국면";
-        $("opEco").textContent = history.length ? "이 수순은 등록된 오프닝에 없습니다." : "";
+        $("opEco").textContent = history.length
+          ? "이 수순은 등록된 오프닝에 없습니다."
+          : `오프닝 ${data.total}종 수록 — 아래에서 첫 수를 골라보세요.`;
       }
 
       const box = $("opNext");
