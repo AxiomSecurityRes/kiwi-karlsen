@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="kiwi-version" content="20" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사용자 찾기 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/css/style.css?v=20" />
+  <script src="/js/theme.js?v=20"></script>
+  <script src="/js/version-check.js?v=20"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html?v=20">로비</a>
+      <a href="/play.html?v=20">봇 대국</a>
+      <a href="/puzzles.html?v=20">퍼즐</a>
+      <a href="/openings.html?v=20">오프닝</a>
+      <a href="/analysis.html?v=20">분석</a>
+      <a href="/players.html?v=20" class="active">사용자</a>
+      <a href="/profile.html?v=20">프로필</a>
+      <a href="/admin.html?v=20" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="card">
+      <h2>🔍 사용자 찾기</h2>
+      <p class="muted">다른 사용자의 전적, 레이팅, 최근 경기를 볼 수 있습니다.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <input type="text" id="plSearch" placeholder="사용자 이름 검색" style="flex:1;min-width:160px;margin:0;" />
+        <select id="plSort" style="width:auto;margin:0;">
+          <option value="rating">레이팅 순</option>
+          <option value="puzzle">퍼즐 레이팅 순</option>
+          <option value="games">대국 수 순</option>
+          <option value="streak">스트릭 순</option>
+          <option value="new">최근 가입 순</option>
+        </select>
+        <button class="btn" id="plSearchBtn">검색</button>
+      </div>
+      <div id="plList"><p class="muted">불러오는 중…</p></div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 사용자 찾기 · v20</footer>
+
+  <script src="/js/api.js?v=20"></script>
+  <script src="/js/settings.js?v=20"></script>
+  <script src="/js/notifications.js?v=20"></script>
+  <script src="/js/players.js?v=20"></script>
+</body>
+</html>

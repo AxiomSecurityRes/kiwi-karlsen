@@ -10,7 +10,7 @@ class LoginRequest(BaseModel):
 
 class BotMoveRequest(BaseModel):
     fen: str
-    level: Optional[int] = Field(default=None, ge=1, le=8)
+    level: Optional[int] = Field(default=None, ge=1, le=11)
     elo: Optional[int] = Field(default=None, ge=100, le=3200)
 
 

@@ -727,3 +727,72 @@ label { display: block; font-weight: 600; font-size: var(--t-sm); margin-bottom:
 .rec-w { color: var(--accent-strong); }
 .rec-l { color: var(--danger); }
 .rec-d { color: var(--ink-soft); }
+
+/* ---------- 사용자 찾기 ---------- */
+.player-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+.player-card:hover { border-color: var(--accent); transform: translateY(-1px); text-decoration: none; }
+.pc-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-soft); flex-shrink: 0; }
+.pc-dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.pc-name { font-weight: 800; display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.pc-record { font-family: var(--font-data); font-size: var(--t-xs); font-weight: 500; color: var(--ink-soft); }
+.pc-stats { display: flex; gap: var(--sp-3); flex-shrink: 0; }
+.pc-stats > span { display: flex; flex-direction: column; align-items: center; }
+.pc-stats b { font-family: var(--font-data); font-size: var(--t-base); color: var(--accent-strong); }
+.pc-stats small { font-size: 0.65rem; color: var(--ink-soft); }
+@media (max-width: 560px) {
+  .player-card { flex-wrap: wrap; }
+  .pc-stats { width: 100%; justify-content: space-around; padding-top: 6px; border-top: 1px solid var(--line); }
+}
+
+/* ---------- 업적 (모바일: 탭하면 조건 표시) ---------- */
+.ach {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 6px;
+  text-align: center;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  transition: transform 0.12s ease;
+  width: 100%;
+}
+.ach:hover { transform: translateY(-2px); }
+.ach.locked { opacity: 0.45; filter: grayscale(1); }
+.ach.got { border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); opacity: 1; filter: none; }
+.ach-icon { font-size: 1.7rem; line-height: 1.2; }
+.ach-name { font-size: var(--t-xs); font-weight: 700; }
+/* 조건과 달성 여부는 기본적으로 숨기고, 탭하면 펼친다 */
+.ach-desc, .ach-state { display: none; }
+.ach.show-desc { grid-column: 1 / -1; }
+.ach.show-desc .ach-desc {
+  display: block;
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.ach.show-desc .ach-state {
+  display: block;
+  font-size: var(--t-xs);
+  font-weight: 800;
+  margin-top: 3px;
+  color: var(--accent-strong);
+}
+.ach.locked.show-desc .ach-state { color: var(--ink-soft); }

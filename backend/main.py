@@ -732,6 +732,38 @@ def profile_username(req: UsernameChange, user: User = Depends(current_user),
     return {"ok": True, "token": auth.issue_token(user), "profile": user.public_dict()}
 
 
+@app.get("/api/players")
+def players_search(q: str = Query(default=""), sort: str = Query(default="rating"),
+                   db: Session = Depends(get_db)):
+    """사용자 검색/목록 (공개). 이름 검색 또는 레이팅/퍼즐/스트릭 순 정렬."""
+    query = db.query(User).filter(User.banned == 0)
+    if q.strip():
+        safe_q = security.escape_like(q.strip())
+        query = query.filter(User.username.ilike(f"%{safe_q}%", escape="\\"))
+
+    order = {
+        "rating": User.rating.desc(),
+        "puzzle": User.puzzle_rating.desc(),
+        "streak": User.streak_best.desc(),
+        "games": (User.wins + User.losses + User.draws).desc(),
+        "new": User.id.desc(),
+    }.get(sort, User.rating.desc())
+
+    rows = query.order_by(order).limit(50).all()
+    online_ids = set(server.online.keys())
+    return {"players": [{
+        "id": u.id,
+        "username": u.username,
+        "rating": round(u.rating),
+        "puzzleRating": round(u.puzzle_rating),
+        "wins": u.wins, "losses": u.losses, "draws": u.draws,
+        "games": u.wins + u.losses + u.draws,
+        "streakBest": u.streak_best,
+        "online": u.id in online_ids,
+        "isAdmin": bool(u.is_admin),
+    } for u in rows]}
+
+
 @app.get("/api/profile/{username}")
 def profile_view(username: str, db: Session = Depends(get_db)):
     u = db.query(User).filter(User.username.ilike(username)).first()
@@ -739,8 +771,20 @@ def profile_view(username: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     games = db.query(Game).filter(
         (Game.white_id == u.id) | (Game.black_id == u.id)
-    ).order_by(Game.id.desc()).limit(10).all()
-    return {"profile": u.public_dict(), "recentGames": [g.summary_dict() for g in games]}
+    ).order_by(Game.id.desc()).limit(20).all()
+    out = []
+    for g in games:
+        d = g.summary_dict()
+        me_white = (g.white_id == u.id)
+        if g.result == "1/2-1/2":
+            d["outcome"] = "draw"
+        elif (g.result == "1-0") == me_white:
+            d["outcome"] = "win"
+        else:
+            d["outcome"] = "loss"
+        d["opponent"] = g.black_name if me_white else g.white_name
+        out.append(d)
+    return {"profile": u.public_dict(), "recentGames": out}
 
 
 # ---------- 관리자 ----------

@@ -1,6 +1,6 @@
 /* 앱 버전 — 캐시된 옛 페이지로 이동하지 않도록 링크에 붙인다.
    (scripts/bump_version.py 가 자동 갱신) */
-window.KIWI_VERSION = "19";
+window.KIWI_VERSION = "20";
 window.kiwiPageUrl = function (page) {
   const p = String(page).replace(/^\/*/, "/");
   return p + (p.indexOf("?") === -1 ? "?v=" : "&v=") + window.KIWI_VERSION;
@@ -89,6 +89,13 @@ const API = (() => {
     profileUpdate: (data) => request("/api/profile", { method: "POST", body: JSON.stringify(data) }),
     profileUsername: (new_username) => request("/api/profile/username", { method: "POST", body: JSON.stringify({ new_username }) }),
     profileView: (username) => request("/api/profile/" + encodeURIComponent(username)),
+    players: (q, sort) => {
+      const p = new URLSearchParams();
+      if (q) p.set("q", q);
+      if (sort) p.set("sort", sort);
+      const qs = p.toString();
+      return request("/api/players" + (qs ? "?" + qs : ""));
+    },
     // 관리자
     adminStats: () => request("/api/admin/stats"),
     adminUsers: (q) => request("/api/admin/users" + (q ? "?q=" + encodeURIComponent(q) : "")),

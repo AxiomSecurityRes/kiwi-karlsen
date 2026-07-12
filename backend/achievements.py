@@ -76,6 +76,82 @@ ACHIEVEMENTS: list[dict] = [
      "icon": "🤝", "check": lambda u, c: c.get("friends", 0) >= 1},
     {"code": "friend_10", "name": "인기 키위", "desc": "친구가 10명이 되었습니다.",
      "icon": "🎉", "check": lambda u, c: c.get("friends", 0) >= 10},
+    {"code": "friend_25", "name": "키위 마당발", "desc": "친구가 25명이 되었습니다.",
+     "icon": "🌐", "check": lambda u, c: c.get("friends", 0) >= 25},
+
+    # 대국 — 추가
+    {"code": "games_500", "name": "오백 판의 노력", "desc": "500판을 두었습니다.",
+     "icon": "🛡️", "check": lambda u, c: (u.wins + u.losses + u.draws) >= 500},
+    {"code": "win_250", "name": "250승", "desc": "온라인 대국에서 250승을 거뒀습니다.",
+     "icon": "🏵️", "check": lambda u, c: u.wins >= 250},
+    {"code": "draw_10", "name": "타협의 달인", "desc": "무승부를 10번 기록했습니다.",
+     "icon": "🤝", "check": lambda u, c: u.draws >= 10},
+    {"code": "winrate_60", "name": "안정적인 승률", "desc": "20판 이상 두고 승률 60%를 넘겼습니다.",
+     "icon": "📊",
+     "check": lambda u, c: (u.wins + u.losses + u.draws) >= 20
+                           and u.wins / max(1, u.wins + u.losses + u.draws) >= 0.6},
+    {"code": "comeback", "name": "불굴의 키위", "desc": "패배 후에도 10판 이상 계속 두었습니다.",
+     "icon": "💪", "check": lambda u, c: u.losses >= 10 and u.wins >= 10},
+
+    # 레이팅 — 추가
+    {"code": "rating_1000", "name": "레이팅 1000", "desc": "레이팅 1000을 넘었습니다.",
+     "icon": "🌱", "check": lambda u, c: u.rating >= 1000},
+    {"code": "rating_1400", "name": "레이팅 1400", "desc": "레이팅 1400을 넘었습니다.",
+     "icon": "🌿", "check": lambda u, c: u.rating >= 1400},
+    {"code": "rating_1600", "name": "레이팅 1600", "desc": "레이팅 1600을 넘었습니다.",
+     "icon": "📗", "check": lambda u, c: u.rating >= 1600},
+    {"code": "rating_2200", "name": "캔디데이트 마스터급", "desc": "레이팅 2200을 넘었습니다.",
+     "icon": "🎓", "check": lambda u, c: u.rating >= 2200},
+    {"code": "rating_2400", "name": "인터내셔널 마스터급", "desc": "레이팅 2400을 넘었습니다.",
+     "icon": "🥈", "check": lambda u, c: u.rating >= 2400},
+    {"code": "rating_2500", "name": "그랜드마스터급", "desc": "레이팅 2500을 넘었습니다.",
+     "icon": "🥇", "check": lambda u, c: u.rating >= 2500},
+
+    # 퍼즐 — 추가
+    {"code": "puzzle_10", "name": "퍼즐 입문", "desc": "퍼즐 10개를 풀었습니다.",
+     "icon": "🔎", "check": lambda u, c: u.puzzles_solved >= 10},
+    {"code": "puzzle_100", "name": "퍼즐 백 개", "desc": "퍼즐 100개를 풀었습니다.",
+     "icon": "📖", "check": lambda u, c: u.puzzles_solved >= 100},
+    {"code": "puzzle_500", "name": "퍼즐 오백 개", "desc": "퍼즐 500개를 풀었습니다.",
+     "icon": "📕", "check": lambda u, c: u.puzzles_solved >= 500},
+    {"code": "puzzle_2500", "name": "퍼즐 도사", "desc": "퍼즐 2500개를 풀었습니다.",
+     "icon": "🧙", "check": lambda u, c: u.puzzles_solved >= 2500},
+    {"code": "puzzle_rating_1000", "name": "퍼즐 레이팅 1000", "desc": "퍼즐 레이팅 1000을 넘었습니다.",
+     "icon": "🔦", "check": lambda u, c: u.puzzle_rating >= 1000},
+    {"code": "puzzle_rating_1800", "name": "퍼즐 레이팅 1800", "desc": "퍼즐 레이팅 1800을 넘었습니다.",
+     "icon": "🔭", "check": lambda u, c: u.puzzle_rating >= 1800},
+    {"code": "puzzle_rating_2400", "name": "퍼즐 레이팅 2400", "desc": "퍼즐 레이팅 2400을 넘었습니다.",
+     "icon": "💠", "check": lambda u, c: u.puzzle_rating >= 2400},
+    {"code": "puzzle_persist", "name": "포기하지 않는 키위", "desc": "퍼즐을 100번 틀리고도 계속 도전했습니다.",
+     "icon": "🧗", "check": lambda u, c: u.puzzles_failed >= 100},
+
+    # 러시 — 추가
+    {"code": "rush_5", "name": "러시 첫 발", "desc": "퍼즐 러시를 한 번 완주했습니다.",
+     "icon": "🏁", "check": lambda u, c: max(u.rush_best_3m, u.rush_best_5m, u.rush_best_survival) >= 5},
+    {"code": "rush_35", "name": "러시 마스터", "desc": "퍼즐 러시에서 35점을 넘겼습니다.",
+     "icon": "⚡", "check": lambda u, c: max(u.rush_best_3m, u.rush_best_5m, u.rush_best_survival) >= 35},
+    {"code": "rush_75", "name": "러시 전설", "desc": "퍼즐 러시에서 75점을 넘겼습니다.",
+     "icon": "☄️", "check": lambda u, c: max(u.rush_best_3m, u.rush_best_5m, u.rush_best_survival) >= 75},
+    {"code": "rush_survival_20", "name": "생존 전문가", "desc": "서바이벌 러시에서 20점을 넘겼습니다.",
+     "icon": "🪂", "check": lambda u, c: u.rush_best_survival >= 20},
+
+    # 스트릭 — 추가
+    {"code": "streak_14", "name": "2주 개근", "desc": "14일 연속 접속했습니다.",
+     "icon": "🍀", "check": lambda u, c: u.streak_best >= 14},
+    {"code": "streak_60", "name": "두 달 개근", "desc": "60일 연속 접속했습니다.",
+     "icon": "🏕️", "check": lambda u, c: u.streak_best >= 60},
+    {"code": "streak_365", "name": "일 년의 키위", "desc": "365일 연속 접속했습니다.",
+     "icon": "🎆", "check": lambda u, c: u.streak_best >= 365},
+
+    # 프로필 / 기타
+    {"code": "profile_done", "name": "자기소개 완료", "desc": "프로필에 자기소개를 작성했습니다.",
+     "icon": "✍️", "check": lambda u, c: bool((u.bio or "").strip())},
+    {"code": "otb_player", "name": "실전 기사", "desc": "OTB(오프라인) 레이팅을 등록했습니다.",
+     "icon": "🏛️", "check": lambda u, c: (u.otb_rating or 0) > 0},
+    {"code": "all_rounder", "name": "만능 키위", "desc": "대국 10판 + 퍼즐 50개 + 러시 10점을 모두 달성했습니다.",
+     "icon": "🌟",
+     "check": lambda u, c: (u.wins + u.losses + u.draws) >= 10 and u.puzzles_solved >= 50
+                           and max(u.rush_best_3m, u.rush_best_5m, u.rush_best_survival) >= 10},
 ]
 
 _BY_CODE = {a["code"]: a for a in ACHIEVEMENTS}

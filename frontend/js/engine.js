@@ -41,14 +41,19 @@ const Engine = (() => {
         else if (line.startsWith("readyok") && gotUci) {
           ready = true; mode = "브라우저 Stockfish (WASM)"; clearTimeout(timeout); resolve(true);
         } else if (line.startsWith("info") && line.indexOf("score") !== -1 && pendingEval) {
+          // 탐색 실패(aspiration window) 라인은 값이 틀리므로 반드시 버린다.
+          // 이걸 읽으면 평가가 엉뚱하게 튄다.
+          if (line.indexOf("lowerbound") !== -1 || line.indexOf("upperbound") !== -1) return;
+          const dM = line.match(/ depth (\d+)/);
+          const d = dM ? parseInt(dM[1], 10) : 0;
+          if (d < (lastEval.depth || 0)) return;   // 더 얕은 결과로 덮어쓰지 않는다
           const cpM = line.match(/score cp (-?\d+)/);
           const mateM = line.match(/score mate (-?\d+)/);
           const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-          const dM = line.match(/ depth (\d+)/);
           if (cpM) { lastEval.score = parseInt(cpM[1], 10); lastEval.mate = null; }
           if (mateM) { lastEval.mate = parseInt(mateM[1], 10); lastEval.score = null; }
           if (pvM) { lastEval.best = pvM[1]; }
-          if (dM) { lastEval.depth = parseInt(dM[1], 10); }
+          if (d) lastEval.depth = d;
         } else if (line.startsWith("bestmove")) {
           const mv = line.split(" ")[1];
           if (pendingEval) {
@@ -128,7 +133,7 @@ const Engine = (() => {
   function negamax(g, depth, alpha, beta, color) {
     if (g.game_over()) return color * staticEval(g);
     // 깊이를 다 쓰면 정지 탐색으로 넘긴다(교환 도중에 끊기지 않도록)
-    if (depth === 0) return quiesce(g, alpha, beta, color, 6);
+    if (depth === 0) return quiesce(g, alpha, beta, color, 4);
 
     let best = -Infinity;
     const moves = g.moves({ verbose: true }).sort((a, b) => (b.captured ? 1 : 0) - (a.captured ? 1 : 0));
@@ -149,12 +154,21 @@ const Engine = (() => {
     const legal = g.moves({ verbose: true });
     const color = g.turn() === "w" ? 1 : -1;
     const ranked = [];
-    for (const m of legal) {
+    // 좋은 수부터 보면 알파-베타 가지치기가 잘 먹혀 훨씬 빨라진다
+    const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+    const ordered = legal.slice().sort((a, b) => {
+      const ca = a.captured ? VAL[a.captured] || 0 : 0;
+      const cb = b.captured ? VAL[b.captured] || 0 : 0;
+      return cb - ca;
+    });
+    let alpha = -Infinity;
+    for (const m of ordered) {
       g.move(m);
       let val;
       if (g.in_checkmate()) val = 100000;
-      else val = -negamax(g, depth, -Infinity, Infinity, -color);
+      else val = -negamax(g, depth, -Infinity, -alpha, -color);
       g.undo();
+      if (val > alpha) alpha = val;   // 창을 좁혀 가지치기 강화
       ranked.push({ uci: m.from + m.to + (m.promotion || ""), score: val });
     }
     ranked.sort((a, b) => b.score - a.score);
@@ -223,9 +237,14 @@ const Engine = (() => {
     if (g.in_stalemate() || g.in_draw()) return { score: 0, mate: null, best: null };
     const legal = g.moves({ verbose: true });
     if (!legal.length) return { score: 0, mate: null, best: null };
-    // 깊이를 짝수로 맞춰(양쪽이 같은 횟수만큼 두도록) 홀짝 편향을 없앤다.
-    // 각 후보 수를 둔 뒤 남은 깊이를 홀수로 주면 상대 응수까지 계산된다.
-    const d = Math.max(1, (depth | 0));
+
+    // ⚠️ 홀짝(side-to-move) 편향 방지:
+    // rankMoves(fen, d) 는 [내 수 1플라이 + d플라이] = (1 + d) 플라이를 탐색한다.
+    // 총 플라이가 홀수면 '두는 쪽'이 한 수를 더 두게 되어
+    // 백 차례엔 백이, 흑 차례엔 흑이 유리하게 나오는 편향이 생긴다.
+    // 따라서 d 는 반드시 홀수여야 한다(총 플라이 짝수).
+    let d = Math.max(1, depth | 0);
+    if (d % 2 === 0) d += 1;
     const ranked = rankMoves(fen, d);
     return { score: Math.round(ranked[0].score), mate: null, best: ranked[0].uci, moverPOV: true };
   }
@@ -250,9 +269,9 @@ const Engine = (() => {
         return out;
       }
     }
-    const r = jsEval(fen, 3);
+    const r = jsEval(fen, 1);   // 총 2플라이(짝수) + 정지탐색 → 빠르고 편향 없음
     if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
-    r.depth = 3;
+    r.depth = 2;
     r.engine = "js";
     return r;
   }
@@ -281,14 +300,17 @@ const Engine = (() => {
       w.onmessage = (e) => {
         const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
         if (line.startsWith("info") && line.indexOf("score") !== -1) {
+          if (line.indexOf("lowerbound") !== -1 || line.indexOf("upperbound") !== -1) return;
+          const dM = line.match(/ depth (\d+)/);
+          const d = dM ? parseInt(dM[1], 10) : 0;
+          if (d < (ev.depth || 0)) return;
           const cpM = line.match(/score cp (-?\d+)/);
           const mateM = line.match(/score mate (-?\d+)/);
           const pvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-          const dM = line.match(/ depth (\d+)/);
           if (cpM) { ev.score = parseInt(cpM[1], 10); ev.mate = null; }
           if (mateM) { ev.mate = parseInt(mateM[1], 10); ev.score = null; }
           if (pvM) ev.best = pvM[1];
-          if (dM) ev.depth = parseInt(dM[1], 10);
+          if (d) ev.depth = d;
         } else if (line.startsWith("bestmove")) {
           clearTimeout(to); w.onmessage = null;
           const mv = line.split(" ")[1];
@@ -339,7 +361,7 @@ const Engine = (() => {
     }
     for (let i = 0; i < fens.length; i++) {
       const turn = fens[i].split(" ")[1] === "b" ? -1 : 1;
-      const r = jsEval(fens[i], 3);
+      const r = jsEval(fens[i], 1);
       if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
       results[i] = r;
       done++;

@@ -10,8 +10,3 @@ node_modules/
 
 # 거대 NNUE 신경망만 제외 (Stockfish 10 고전 평가는 번들됨)
 *.nnue
-
-p.csv
-p.csv.zst
-*.zst
-lichess_db_puzzle*

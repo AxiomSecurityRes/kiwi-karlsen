@@ -119,11 +119,22 @@
       if (!list.length) { box.innerHTML = '<p class="muted">아직 획득한 업적이 없습니다.</p>'; return; }
       const earned = list.filter((a) => a.earned).length;
       $("pfAchCount").textContent = self ? `${earned} / ${list.length}` : `${list.length}개 획득`;
+      // 모바일에는 title 툴팁이 뜨지 않으므로 탭하면 조건이 펼쳐지도록 한다
       box.innerHTML = list.map((a) => `
-        <div class="ach ${a.earned ? "got" : "locked"}" title="${esc(a.desc)}">
-          <div class="ach-icon">${esc(a.icon)}</div>
-          <div class="ach-name">${esc(a.name)}</div>
-        </div>`).join("");
+        <button class="ach ${a.earned ? "got" : "locked"}" data-code="${esc(a.code)}"
+                aria-expanded="false">
+          <span class="ach-icon">${esc(a.icon)}</span>
+          <span class="ach-name">${esc(a.name)}</span>
+          <span class="ach-desc">${esc(a.desc)}</span>
+          <span class="ach-state">${a.earned ? "✅ 달성" : "🔒 미달성"}</span>
+        </button>`).join("");
+
+      box.querySelectorAll(".ach").forEach((el) => {
+        el.addEventListener("click", () => {
+          const open = el.classList.toggle("show-desc");
+          el.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+      });
     } catch (e) {
       box.innerHTML = `<p class="muted">${esc(e.message)}</p>`;
     }
