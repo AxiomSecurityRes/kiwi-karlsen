@@ -9,11 +9,35 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+
+      # 토큰 서명 비밀키. 값이 바뀌면 기존 로그인 토큰이 모두 무효화됩니다.
+      # 한 번 생성된 뒤에는 절대 바꾸지 마세요.
       - key: KIWI_SECRET
         generateValue: true
-      # 백엔드 엔진을 쓰려면 Stockfish 바이너리 경로 지정 (선택).
-      # 무료 플랜에서는 클라이언트 WASM 엔진만으로도 봇이 동작합니다.
-      - key: STOCKFISH_PATH
-        value: ""
+
+      # 이 사용자명으로 가입/로그인하면 자동으로 관리자 권한을 받습니다.
+      # (또는 가장 먼저 가입한 계정이 관리자가 됩니다.)
+      - key: ADMIN_USERNAME
+        value: "brady"
+
+      # 퍼즐 CSV 경로와 메모리에 올릴 최대 개수.
+      # 무료 플랜(RAM 512MB)에서는 40000 이하를 권장합니다.
       - key: PUZZLE_FILE
         value: "data/puzzles.csv"
+      - key: MAX_PUZZLES
+        value: "40000"
+
+      # 다른 도메인에서 API를 호출해야 할 때만 지정(쉼표 구분).
+      # 비워두면 같은 출처에서만 허용합니다(권장).
+      - key: ALLOWED_ORIGINS
+        value: ""
+
+      # 백엔드 Stockfish 바이너리 경로(선택).
+      # 무료 플랜에서는 브라우저 WASM 엔진만으로도 봇/분석이 동작합니다.
+      - key: STOCKFISH_PATH
+        value: ""
+
+      # 영구 DB를 쓰려면 PostgreSQL 연결 문자열을 넣으세요.
+      # 비워두면 SQLite를 쓰며, 무료 플랜에서는 재배포 시 초기화됩니다.
+      # - key: DATABASE_URL
+      #   value: "postgresql://..."

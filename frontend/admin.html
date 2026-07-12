@@ -6,6 +6,7 @@
   <title>관리자 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -15,6 +16,7 @@
       <a href="/index.html">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html">퍼즐</a>
+      <a href="/openings.html">오프닝</a>
       <a href="/analysis.html">분석</a>
       <a href="/profile.html">프로필</a>
       <a href="/admin.html" class="active">관리자</a>
@@ -22,33 +24,124 @@
   </header>
 
   <main class="container">
-    <div id="denied" class="card hidden"><h2>⛔ 접근 불가</h2><p class="muted">관리자만 접근할 수 있습니다. <a href="/index.html">로비로</a></p></div>
+    <div id="denied" class="card hidden">
+      <h2>⛔ 접근 불가</h2>
+      <p class="muted">관리자만 접근할 수 있습니다. <a href="/index.html">로비로 돌아가기</a></p>
+    </div>
 
     <div id="adminBody" class="hidden">
-      <div class="card">
-        <h2>📊 사이트 현황</h2>
-        <div class="grid" id="statGrid" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;"></div>
-        <div style="margin-top:12px;">
-          <button class="btn secondary" id="reloadPzBtn">🧩 퍼즐 DB 다시 로드</button>
-          <span id="reloadNote" class="muted"></span>
-        </div>
+      <!-- 탭 -->
+      <div class="admin-tabs">
+        <button class="tab-btn active" data-tab="tabDash">📊 대시보드</button>
+        <button class="tab-btn" data-tab="tabUsers">👥 사용자</button>
+        <button class="tab-btn" data-tab="tabGames">♟ 게임</button>
+        <button class="tab-btn" data-tab="tabSecurity">🛡️ 보안</button>
+        <button class="tab-btn" data-tab="tabSettings">⚙️ 사이트 설정</button>
+        <button class="tab-btn" data-tab="tabAudit">📜 감사 로그</button>
       </div>
 
-      <div class="card">
-        <h2>👥 사용자 관리</h2>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <input type="text" id="userSearch" placeholder="사용자명 검색" style="margin:0;" />
-          <button class="btn small" id="searchBtn">검색</button>
+      <!-- 대시보드 -->
+      <section id="tabDash" class="tab-pane">
+        <div class="card">
+          <h2>📊 사이트 현황</h2>
+          <div class="grid" id="statGrid" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn secondary" id="reloadPzBtn">🧩 퍼즐 DB 다시 로드</button>
+            <span id="reloadNote" class="muted"></span>
+          </div>
         </div>
-        <div id="userTable"></div>
-      </div>
+        <div class="card">
+          <h2>📢 전체 공지 방송</h2>
+          <p class="muted">접속 중인 모든 사용자에게 즉시 알림을 보냅니다.</p>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="announceText" placeholder="공지 내용" maxlength="500" style="margin:0;" />
+            <button class="btn brown" id="announceBtn">방송</button>
+          </div>
+          <p class="muted" id="announceNote"></p>
+        </div>
+      </section>
+
+      <!-- 사용자 -->
+      <section id="tabUsers" class="tab-pane hidden">
+        <div class="card">
+          <h2>👥 사용자 관리</h2>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="userSearch" placeholder="사용자명 검색" style="margin:0;" />
+            <button class="btn small" id="searchBtn">검색</button>
+          </div>
+          <div id="userTable"></div>
+        </div>
+        <div class="card hidden" id="userDetailCard">
+          <h2>🔎 사용자 상세 <span id="udName"></span>
+            <button class="btn small secondary" id="udClose" style="float:right;">닫기</button>
+          </h2>
+          <div id="udBody"></div>
+        </div>
+      </section>
+
+      <!-- 게임 -->
+      <section id="tabGames" class="tab-pane hidden">
+        <div class="card">
+          <h2>♟ 게임 기록 관리</h2>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <input type="text" id="gameSearch" placeholder="플레이어명으로 검색" style="margin:0;" />
+            <button class="btn small" id="gameSearchBtn">검색</button>
+          </div>
+          <div id="gameTable"></div>
+        </div>
+      </section>
+
+      <!-- 보안 -->
+      <section id="tabSecurity" class="tab-pane hidden">
+        <div class="card">
+          <h2>🤖 봇 의심 사용자</h2>
+          <div id="suspTable"><p class="muted">불러오는 중…</p></div>
+        </div>
+        <div class="card">
+          <h2>🛡️ 보안 감사 로그
+            <span class="muted" style="font-size:0.8rem;font-weight:400;">(IP는 해시로만 저장 — 개인정보 보호)</span>
+          </h2>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <select id="secKind" style="width:auto;margin:0;">
+              <option value="">전체</option>
+              <option value="login_failed">로그인 실패</option>
+              <option value="login_locked">계정 잠금</option>
+              <option value="rate_limited">레이트 리밋</option>
+              <option value="bot_suspect">봇 의심</option>
+              <option value="banned_login">정지 계정 접근</option>
+            </select>
+            <button class="btn small secondary" id="secRefresh">새로고침</button>
+          </div>
+          <div id="secTable"></div>
+        </div>
+      </section>
+
+      <!-- 사이트 설정 -->
+      <section id="tabSettings" class="tab-pane hidden">
+        <div class="card">
+          <h2>⚙️ 사이트 설정</h2>
+          <p class="muted">재배포 없이 즉시 적용됩니다.</p>
+          <div id="settingsList"></div>
+        </div>
+      </section>
+
+      <!-- 감사 로그 -->
+      <section id="tabAudit" class="tab-pane hidden">
+        <div class="card">
+          <h2>📜 관리자 행위 감사 로그</h2>
+          <p class="muted">모든 관리자 작업이 기록됩니다. (비밀번호 원문은 저장되지 않음)</p>
+          <button class="btn small secondary" id="auditRefresh">새로고침</button>
+          <div id="auditTable" style="margin-top:10px;"></div>
+        </div>
+      </section>
     </div>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 관리자 · v9</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 관리자 · v15</footer>
 
   <script src="/js/api.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/notifications.js"></script>
   <script src="/js/admin.js"></script>
 </body>
 </html>

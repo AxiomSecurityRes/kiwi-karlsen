@@ -5,6 +5,7 @@ CSV 헤더: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,
 - Moves[0]: 자동 재생되는 상대 수 (이걸 둔 뒤 풀이자가 둘 차례가 됨)
 - Moves[1..]: 정답 수열 (풀이자/상대 번갈아)
 """
+import bisect
 import csv
 import os
 import random
@@ -15,6 +16,10 @@ from .config import settings
 _PUZZLES: list[dict] = []
 _BY_ID: dict[str, dict] = {}
 _THEME_COUNTS: dict[str, int] = {}
+# 성능 인덱스: 레이팅 오름차순 정렬 + 테마별 목록 (대용량 DB에서 O(log n) 조회)
+_SORTED: list[dict] = []          # 레이팅 오름차순
+_SORTED_RATINGS: list[int] = []   # bisect 용 키 배열
+_BY_THEME: dict[str, list[dict]] = {}
 
 # Lichess 테마 코드 → 한글 표시명 (자주 쓰는 것 위주)
 THEME_LABELS = {
@@ -107,6 +112,18 @@ def load_puzzles() -> None:
         _BY_ID[norm["id"]] = norm
         for th in norm.get("theme_list", []):
             _THEME_COUNTS[th] = _THEME_COUNTS.get(th, 0) + 1
+    _build_indexes()
+
+
+def _build_indexes() -> None:
+    """레이팅 정렬 인덱스와 테마 인덱스를 만든다(조회를 O(log n) 으로)."""
+    global _SORTED, _SORTED_RATINGS, _BY_THEME
+    _SORTED = sorted(_PUZZLES, key=lambda p: p["rating"])
+    _SORTED_RATINGS = [p["rating"] for p in _SORTED]
+    _BY_THEME = {}
+    for p in _SORTED:  # 테마별 목록도 레이팅 순 유지
+        for th in p.get("theme_list", []):
+            _BY_THEME.setdefault(th, []).append(p)
 
 
 def count() -> int:
@@ -122,19 +139,32 @@ def themes() -> list[dict]:
     return out
 
 
+def _range_slice(items: list[dict], ratings: list[int],
+                 min_rating: int, max_rating: int) -> list[dict]:
+    """레이팅 오름차순 목록에서 [min,max] 구간을 이진 탐색으로 잘라낸다."""
+    lo = bisect.bisect_left(ratings, min_rating)
+    hi = bisect.bisect_right(ratings, max_rating)
+    return items[lo:hi]
+
+
 def random_puzzle(min_rating: int = 0, max_rating: int = 4000,
                   theme: str = "") -> Optional[dict]:
-    def ok(p):
-        if not (min_rating <= p["rating"] <= max_rating):
-            return False
-        if theme and theme not in p.get("theme_list", []):
-            return False
-        return True
+    """레이팅/테마 조건에 맞는 퍼즐 하나. 대용량에서도 빠르도록 인덱스를 쓴다."""
+    if not _PUZZLES:
+        return None
 
-    pool = [p for p in _PUZZLES if ok(p)]
+    if theme:
+        pool_all = _BY_THEME.get(theme)
+        if pool_all:
+            ratings = [p["rating"] for p in pool_all]
+            pool = _range_slice(pool_all, ratings, min_rating, max_rating)
+            if pool:
+                return random.choice(pool)
+        # 테마 조건을 만족하는 게 없으면 레이팅만으로 폴백
+
+    pool = _range_slice(_SORTED, _SORTED_RATINGS, min_rating, max_rating)
     if not pool:
-        # 조건을 만족하는 퍼즐이 없으면 레이팅만 맞춰 폴백
-        pool = [p for p in _PUZZLES if min_rating <= p["rating"] <= max_rating] or _PUZZLES
+        pool = _SORTED or _PUZZLES
     if not pool:
         return None
     return random.choice(pool)
@@ -142,3 +172,15 @@ def random_puzzle(min_rating: int = 0, max_rating: int = 4000,
 
 def get_puzzle(puzzle_id: str) -> Optional[dict]:
     return _BY_ID.get(puzzle_id)
+
+
+def all_puzzles() -> list[dict]:
+    """로드된 전체 퍼즐(일일 퍼즐 결정론적 선택 등에 사용)."""
+    return _PUZZLES
+
+
+def range_pool(min_rating: int, max_rating: int) -> list[dict]:
+    """레이팅 구간의 퍼즐 목록(읽기 전용). 이진 탐색이라 매우 빠르다."""
+    if not _SORTED:
+        return []
+    return _range_slice(_SORTED, _SORTED_RATINGS, min_rating, max_rating)

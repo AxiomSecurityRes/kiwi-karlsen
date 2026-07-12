@@ -165,9 +165,15 @@
       const fxCls = info.fx ? " mv-fx" : "";
       badge = `<sup class="mv-badge${fxCls}" style="color:${info.color}" title="${info.ko}">${info.icon}</sup>`;
     }
-    return `<span class="mv${active}" data-ply="${i + 1}" onclick="window.kiwiGoto(${i + 1})">${m.san}${badge}</span> `;
+    return `<span class="mv${active}" data-ply="${i + 1}">${m.san}${badge}</span> `;
   }
-  window.kiwiGoto = (p) => gotoPly(p);
+  // CSP(script-src 'self')는 인라인 onclick 을 차단하므로 이벤트 위임을 쓴다.
+  $("analysisMoves").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-ply]");
+    if (!el) return;
+    const p = parseInt(el.getAttribute("data-ply"), 10);
+    if (!isNaN(p)) gotoPly(p);
+  });
 
   function maybeCelebrate(p) {
     if (p < 1) return;
@@ -446,7 +452,8 @@
         const row = document.createElement("div");
         row.className = "player-row";
         const res = g.result === "1-0" ? "백승" : g.result === "0-1" ? "흑승" : "무";
-        row.innerHTML = `<span class="name">${g.white} vs ${g.black}</span><span class="rating">${res}</span>`;
+        const E = window.kiwiEscapeHtml;
+        row.innerHTML = `<span class="name">${E(g.white)} vs ${E(g.black)}</span><span class="rating">${E(res)}</span>`;
         const btn = document.createElement("button");
         btn.className = "btn small"; btn.textContent = "리뷰";
         btn.onclick = async () => {

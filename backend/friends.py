@@ -84,7 +84,8 @@ def list_incoming_requests(db: Session, user_id: int) -> list[dict]:
 
 
 def save_dm(db: Session, sender_id: int, recipient_id: int, text: str) -> Optional[DirectMessage]:
-    text = (text or "").strip()[:1000]
+    from .security import sanitize_text
+    text = sanitize_text(text, 1000, allow_newlines=True)
     if not text:
         return None
     dm = DirectMessage(sender_id=sender_id, recipient_id=recipient_id, text=text)

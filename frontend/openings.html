@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오프닝 탐색기 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html">로비</a>
+      <a href="/play.html">봇 대국</a>
+      <a href="/puzzles.html">퍼즐</a>
+      <a href="/openings.html" class="active">오프닝</a>
+      <a href="/analysis.html">분석</a>
+      <a href="/profile.html">프로필</a>
+      <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="grid two">
+      <div class="card">
+        <div class="board-wrap"><div id="opening-board"></div></div>
+        <div class="center" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn small secondary" id="opBack">◀ 무르기</button>
+          <button class="btn small secondary" id="opFlip">🔄 뒤집기</button>
+          <button class="btn small danger" id="opReset">🗑 처음부터</button>
+        </div>
+        <div class="status" id="opMoves">아직 수가 없습니다. 오른쪽에서 정석 수를 고르거나 기물을 직접 움직이세요.</div>
+      </div>
+
+      <div class="card">
+        <h2>📖 오프닝 탐색기</h2>
+        <div id="opName" class="op-name">시작 국면</div>
+        <p class="muted" id="opEco"></p>
+
+        <h3 style="margin-top:14px;">이어지는 정석 수</h3>
+        <div id="opNext"><p class="muted">불러오는 중…</p></div>
+
+        <h3 style="margin-top:16px;">오프닝 검색</h3>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="opSearch" placeholder="예: 시실리안, 루이 로페즈, C60" style="margin:0;" />
+          <button class="btn small" id="opSearchBtn">검색</button>
+        </div>
+        <div id="opResults" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 오프닝 탐색기 · v15</footer>
+
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/settings.js"></script>
+  <script src="/js/notifications.js"></script>
+  <script src="/js/sounds.js"></script>
+  <script src="/js/tapmove.js"></script>
+  <script src="/js/openings.js"></script>
+</body>
+</html>

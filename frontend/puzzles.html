@@ -7,6 +7,7 @@
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -16,6 +17,7 @@
       <a href="/index.html">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html" class="active">퍼즐</a>
+      <a href="/openings.html">오프닝</a>
       <a href="/analysis.html">분석</a>
       <a href="/profile.html">프로필</a>
       <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
@@ -23,9 +25,52 @@
   </header>
 
   <main class="container">
-    <div class="grid two">
+    <div class="admin-tabs" id="pzTabs">
+      <button class="tab-btn active" data-mode="train">🧩 훈련</button>
+      <button class="tab-btn" data-mode="daily">📅 일일 퍼즐</button>
+      <button class="tab-btn" data-mode="rush">⚡ 퍼즐 러시</button>
+    </div>
+
+    <!-- 일일 퍼즐 안내 -->
+    <div class="card hidden" id="dailyCard">
+      <h2>📅 오늘의 퍼즐 <span class="muted" id="dailyDate" style="font-size:0.8rem;font-weight:400;"></span></h2>
+      <p class="muted">모든 사용자가 같은 문제를 풉니다. 하루에 한 번만 기록됩니다.</p>
+      <div id="dailyStatus"></div>
+      <button class="btn" id="dailyStart">오늘의 퍼즐 풀기</button>
+    </div>
+
+    <!-- 러시 설정/결과 -->
+    <div class="card hidden" id="rushCard">
+      <h2>⚡ 퍼즐 러시</h2>
+      <p class="muted">제한 시간 안에 최대한 많이 푸세요. 3번 틀리면 종료됩니다.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+        <label style="margin:0;">모드</label>
+        <select id="rushMode" style="width:auto;margin:0;">
+          <option value="3m">3분</option>
+          <option value="5m">5분</option>
+          <option value="survival">서바이벌 (시간 무제한)</option>
+        </select>
+        <button class="btn" id="rushStart">시작</button>
+      </div>
+      <div id="rushLive" class="hidden">
+        <div class="rush-hud">
+          <span>⏱ <b id="rushTime">--:--</b></span>
+          <span>✅ <b id="rushScore">0</b></span>
+          <span>❌ <b id="rushMiss">0</b>/3</span>
+        </div>
+      </div>
+      <div id="rushResult"></div>
+      <h3 style="margin-top:14px;">🏆 러시 순위</h3>
+      <div id="rushBoard"></div>
+    </div>
+
+    <div class="grid two" id="trainView">
       <div class="card">
         <div class="board-wrap"><div id="puzzle-board"></div></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+          <span id="pzModeBadge" class="rated-badge">레이팅 반영</span>
+          <span id="pzRatingLine" class="muted"></span>
+        </div>
         <div class="status" id="puzzleStatus">불러오는 중…</div>
       </div>
       <div class="card">
@@ -51,6 +96,12 @@
           </div>
         </div>
         <div style="margin-top:10px;">
+          <label style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+            <input type="checkbox" id="pzRated" checked style="width:auto;margin:0;" />
+            레이팅 반영 (끄면 연습 모드)
+          </label>
+        </div>
+        <div style="margin-top:10px;">
           <label>유형(테마)</label>
           <select id="themeSelect" style="width:auto;">
             <option value="">전체 유형</option>
@@ -63,7 +114,7 @@
     </div>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요! · v9</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요! · v15</footer>
 
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
   <script src="/assets/vendor/chess-0.10.3.min.js"></script>
@@ -71,6 +122,7 @@
 
   <script src="/js/api.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/notifications.js"></script>
   <script src="/js/sounds.js"></script>
   <script src="/js/tapmove.js"></script>
   <script src="/js/puzzles.js"></script>

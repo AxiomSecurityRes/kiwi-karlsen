@@ -7,6 +7,7 @@
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -16,6 +17,7 @@
       <a href="/index.html" class="active">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html">퍼즐</a>
+      <a href="/openings.html">오프닝</a>
       <a href="/analysis.html">분석</a>
       <a href="/profile.html">프로필</a>
       <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
@@ -25,6 +27,7 @@
   </header>
 
   <main class="container">
+    <div id="motdBanner" class="motd hidden"></div>
     <!-- 로그인 화면 -->
     <section id="loginView" class="card" style="max-width:420px;margin:40px auto;">
       <h2 id="authTitle">🥝 로그인</h2>
@@ -102,6 +105,7 @@
             <span class="who" id="meLabel">나</span>
             <span class="clock active" id="myClock">10:00</span>
           </div>
+          <div class="op-live" id="openingLive"></div>
           <div class="status" id="gameStatus"></div>
           <div class="center">
             <button class="btn danger small" id="resignBtn">기권</button>
@@ -140,8 +144,9 @@
       <p id="resultText" class="muted"></p>
       <p id="resultRating" style="font-weight:800;color:var(--kiwi-green-dark);"></p>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="btn" id="resultRematch">🔁 재대국</button>
         <button class="btn brown" id="resultReview">📊 게임 리뷰</button>
-        <button class="btn" id="resultOk">로비로 돌아가기</button>
+        <button class="btn secondary" id="resultOk">로비로</button>
       </div>
     </div>
   </div>
@@ -161,7 +166,7 @@
 
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스 · v9</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스 · v15</footer>
 
   <!-- 라이브러리 -->
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
@@ -171,6 +176,7 @@
   <!-- 앱 스크립트 -->
   <script src="/js/api.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/notifications.js"></script>
   <script src="/js/sounds.js"></script>
   <script src="/js/socket.js"></script>
   <script src="/js/tapmove.js"></script>

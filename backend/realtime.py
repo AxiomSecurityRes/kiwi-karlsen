@@ -65,6 +65,8 @@ class GameServer:
     def __init__(self) -> None:
         self.online: dict[int, OnlineUser] = {}
         self.games: dict[str, LiveGame] = {}
+        # 대기 중인 도전: (보낸사람, 받는사람) -> {"minutes","increment"}
+        self.pending: dict[tuple[int, int], dict] = {}
         self._lock = asyncio.Lock()
         self._watcher_started = False
         self.loop = None  # 이벤트 루프 (REST→WS 푸시용)
@@ -121,6 +123,14 @@ class GameServer:
 
     async def disconnect(self, user_id: int) -> None:
         ou = self.online.pop(user_id, None)
+        # 이 사용자와 관련된 대기 중 도전 정리 + 상대에게 취소 통보
+        for (from_id, to_id) in self._clear_pending_for(user_id):
+            other = to_id if from_id == user_id else from_id
+            await self._send(other, {
+                "type": "challenge_cancelled", "fromId": from_id, "byMe": False,
+                "fromName": ou.username if ou else "상대",
+                "message": "상대가 접속을 종료했습니다.",
+            })
         if ou and ou.game_id:
             game = self.games.get(ou.game_id)
             if game and not game.over:
@@ -164,6 +174,10 @@ class GameServer:
             await self._on_challenge(user_id, data)
         elif t == "challenge_response":
             await self._on_challenge_response(user_id, data)
+        elif t == "challenge_cancel":
+            await self._on_challenge_cancel(user_id, data)
+        elif t == "rematch":
+            await self._on_rematch(user_id, data)
         elif t == "move":
             await self._on_move(user_id, data)
         elif t == "resign":
@@ -192,18 +206,35 @@ class GameServer:
             return
         minutes = int(data.get("minutes", 10))
         increment = int(data.get("increment", 0))
+        # 같은 상대에게 중복 도전 방지
+        if (from_id, to_id) in self.pending:
+            await self._send(from_id, {"type": "error", "message": "이미 도전을 보냈습니다."})
+            return
+        self.pending[(from_id, to_id)] = {"minutes": minutes, "increment": increment}
         await self._send(to_id, {
             "type": "incoming_challenge", "fromId": from_id,
             "fromName": challenger.username, "fromRating": challenger.rating,
             "minutes": minutes, "increment": increment,
         })
-        await self._send(from_id, {"type": "challenge_sent", "toName": target.username})
+        await self._send(from_id, {
+            "type": "challenge_sent", "toId": to_id, "toName": target.username,
+            "minutes": minutes, "increment": increment,
+        })
 
     async def _on_challenge_response(self, responder_id: int, data: dict) -> None:
         from_id = data.get("fromId")
         accept = bool(data.get("accept"))
         responder = self.online.get(responder_id)
         challenger = self.online.get(from_id)
+        key = (from_id, responder_id)
+
+        # 이미 취소되었거나 만료된 도전
+        if key not in self.pending:
+            await self._send(responder_id, {"type": "challenge_gone",
+                                            "message": "이 도전은 취소되었거나 만료되었습니다."})
+            return
+        info = self.pending.pop(key)
+
         if not responder or not challenger:
             return
         if not accept:
@@ -212,9 +243,40 @@ class GameServer:
         if responder.game_id or challenger.game_id:
             await self._send(from_id, {"type": "error", "message": "도전을 시작할 수 없습니다."})
             return
-        minutes = int(data.get("minutes", 10))
-        increment = int(data.get("increment", 0))
+        minutes = int(data.get("minutes", info.get("minutes", 10)))
+        increment = int(data.get("increment", info.get("increment", 0)))
+        # 이 두 사람 사이의 다른 대기 도전도 정리
+        self._clear_pending_between(from_id, responder_id)
         await self._start_game(challenger.user_id, responder.user_id, minutes, increment)
+
+    async def _on_challenge_cancel(self, from_id: int, data: dict) -> None:
+        """보낸 도전을 취소한다."""
+        to_id = data.get("toId")
+        key = (from_id, to_id)
+        if key not in self.pending:
+            await self._send(from_id, {"type": "error", "message": "취소할 도전이 없습니다."})
+            return
+        self.pending.pop(key, None)
+        challenger = self.online.get(from_id)
+        name = challenger.username if challenger else "상대"
+        await self._send(from_id, {"type": "challenge_cancelled", "toId": to_id, "byMe": True})
+        await self._send(to_id, {"type": "challenge_cancelled", "fromId": from_id,
+                                 "fromName": name, "byMe": False})
+
+    async def _on_rematch(self, from_id: int, data: dict) -> None:
+        """직전 상대에게 재대국을 신청한다(도전과 동일한 흐름)."""
+        await self._on_challenge(from_id, data)
+
+    def _clear_pending_between(self, a_id: int, b_id: int) -> None:
+        for key in [(a_id, b_id), (b_id, a_id)]:
+            self.pending.pop(key, None)
+
+    def _clear_pending_for(self, user_id: int) -> list[tuple[int, int]]:
+        """이 사용자와 관련된 모든 대기 도전 제거. 제거된 키 목록 반환."""
+        removed = [k for k in self.pending if k[0] == user_id or k[1] == user_id]
+        for k in removed:
+            self.pending.pop(k, None)
+        return removed
 
     # ---------- 대국 시작 ----------
     async def _start_game(self, a_id: int, b_id: int, minutes: int = 10, increment: int = 0) -> None:
@@ -242,9 +304,11 @@ class GameServer:
         common = {"type": "game_start", "gameId": game_id, "fen": start_fen,
                   "clocks": game.clocks(), "increment": increment}
         await self._send(white_id, {**common, "color": "white",
-                                    "opponent": {"name": black.username, "rating": black.rating}})
+                                    "opponent": {"id": black_id, "name": black.username,
+                                                 "rating": black.rating}})
         await self._send(black_id, {**common, "color": "black",
-                                    "opponent": {"name": white.username, "rating": white.rating}})
+                                    "opponent": {"id": white_id, "name": white.username,
+                                                 "rating": white.rating}})
         await self.broadcast_players()
 
     # ---------- 수 처리 ----------

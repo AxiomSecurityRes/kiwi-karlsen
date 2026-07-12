@@ -1,7 +1,7 @@
 /* friends-ui.js — 친구 목록/요청/추가 + DM 채팅 패널 (index.html) */
 (function () {
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => window.kiwiEscapeHtml ? window.kiwiEscapeHtml(s) : String(s);
+  const esc = (s) => window.kiwiEscapeHtml(s);
 
   let dmFriend = null;          // 현재 열린 DM 상대 {id, username}
   let loggedIn = false;

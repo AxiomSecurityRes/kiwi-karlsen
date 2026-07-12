@@ -1,3 +1,18 @@
+/* 전역 XSS 방어 유틸 — 모든 페이지에서 사용 (api.js 는 전 페이지에 로드됨) */
+window.kiwiEscapeHtml = function (value) {
+  if (value === null || value === undefined) return "";
+  return String(value).replace(/[&<>"'`=\/]/g, function (c) {
+    return {
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;",
+      "'": "&#39;", "`": "&#96;", "=": "&#61;", "/": "&#47;",
+    }[c];
+  });
+};
+// 안전한 텍스트 설정 헬퍼 (innerHTML 대신 사용 권장)
+window.kiwiSetText = function (el, text) {
+  if (el) el.textContent = text === null || text === undefined ? "" : String(text);
+};
+
 /* REST API 호출 및 세션 관리 */
 const API = (() => {
   const TOKEN_KEY = "kiwi_token";
@@ -47,8 +62,8 @@ const API = (() => {
     online: () => request("/api/online"),
     randomPuzzle: (min = 0, max = 4000, theme = "") =>
       request(`/api/puzzles/random?min=${min}&max=${max}${theme ? "&theme=" + encodeURIComponent(theme) : ""}`),
-    puzzleSolved: (puzzle_id, success) =>
-      request("/api/puzzles/solved", { method: "POST", body: JSON.stringify({ puzzle_id, success }) }),
+    puzzleSolved: (puzzle_id, success, rated = true) =>
+      request("/api/puzzles/solved", { method: "POST", body: JSON.stringify({ puzzle_id, success, rated }) }),
     puzzleThemes: () => request("/api/puzzles/themes"),
     // 친구
     userSearch: (q) => request("/api/users/search?q=" + encodeURIComponent(q)),
@@ -72,6 +87,53 @@ const API = (() => {
     adminUpdateUser: (id, data) => request("/api/admin/user/" + id, { method: "POST", body: JSON.stringify(data) }),
     adminDeleteUser: (id) => request("/api/admin/user/" + id, { method: "DELETE" }),
     adminReloadPuzzles: () => request("/api/admin/reload_puzzles", { method: "POST" }),
+    adminSecurity: (kind) => request("/api/admin/security" + (kind ? "?kind=" + encodeURIComponent(kind) : "")),
+    adminSuspicious: () => request("/api/admin/suspicious"),
+    adminClearSuspicion: (id) => request("/api/admin/clear_suspicion/" + id, { method: "POST" }),
+    // 관리자 전권 (Step 2)
+    adminUserFull: (id) => request("/api/admin/user/" + id + "/full"),
+    adminSetStreak: (id, data) => request("/api/admin/user/" + id + "/streak", { method: "POST", body: JSON.stringify(data) }),
+    adminSetStats: (id, data) => request("/api/admin/user/" + id + "/stats", { method: "POST", body: JSON.stringify(data) }),
+    adminResetPassword: (id, new_password) => request("/api/admin/user/" + id + "/password", { method: "POST", body: JSON.stringify({ new_password }) }),
+    adminUserFriends: (id) => request("/api/admin/user/" + id + "/friends"),
+    adminDeleteFriendship: (fid) => request("/api/admin/friendship/" + fid, { method: "DELETE" }),
+    adminAddFriendship: (user_a, user_b) => request("/api/admin/friendship", { method: "POST", body: JSON.stringify({ user_a, user_b }) }),
+    adminUserDms: (id) => request("/api/admin/user/" + id + "/dms"),
+    adminDeleteDm: (id) => request("/api/admin/dm/" + id, { method: "DELETE" }),
+    adminGames: (q) => request("/api/admin/games" + (q ? "?q=" + encodeURIComponent(q) : "")),
+    adminDeleteGame: (id) => request("/api/admin/game/" + id, { method: "DELETE" }),
+    adminSettings: () => request("/api/admin/settings"),
+    adminSetSetting: (key, value) => request("/api/admin/settings", { method: "POST", body: JSON.stringify({ key, value }) }),
+    adminAnnounce: (text) => request("/api/admin/announce", { method: "POST", body: JSON.stringify({ text }) }),
+    adminActions: () => request("/api/admin/actions"),
+    // 공개 사이트 정보
+    site: () => request("/api/site"),
+    // --- Step 4: 훈련 · 오프닝 · 업적 · 알림 · 아카이브 ---
+    dailyPuzzle: () => request("/api/puzzles/daily"),
+    dailyStatus: () => request("/api/puzzles/daily/status"),
+    dailySolved: (success, seconds) =>
+      request("/api/puzzles/daily/solved", { method: "POST", body: JSON.stringify({ success, seconds }) }),
+    rushModes: () => request("/api/rush/modes"),
+    rushPuzzles: (count = 60) => request("/api/rush/puzzles?count=" + count),
+    rushResult: (mode, score, misses) =>
+      request("/api/rush/result", { method: "POST", body: JSON.stringify({ mode, score, misses }) }),
+    rushLeaderboard: (mode = "3m") => request("/api/rush/leaderboard?mode=" + encodeURIComponent(mode)),
+    rushHistory: () => request("/api/rush/history"),
+    puzzleLeaderboard: () => request("/api/puzzles/leaderboard"),
+    openings: (moves) => request("/api/openings" + (moves && moves.length ? "?moves=" + encodeURIComponent(moves.join(",")) : "")),
+    openingsSearch: (q) => request("/api/openings/search?q=" + encodeURIComponent(q)),
+    achievements: () => request("/api/achievements"),
+    achievementsOf: (username) => request("/api/achievements/" + encodeURIComponent(username)),
+    notifications: () => request("/api/notifications"),
+    notificationsRead: () => request("/api/notifications/read", { method: "POST" }),
+    notificationsClear: () => request("/api/notifications", { method: "DELETE" }),
+    gamesArchive: (result, opponent) => {
+      const p = new URLSearchParams();
+      if (result) p.set("result", result);
+      if (opponent) p.set("opponent", opponent);
+      const q = p.toString();
+      return request("/api/games/archive" + (q ? "?" + q : ""));
+    },
     // 게임 기록 / 리뷰
     recentGames: () => request("/api/games/recent"),
     gameDetail: (id) => request("/api/games/" + id),

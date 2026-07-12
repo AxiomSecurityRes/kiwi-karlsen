@@ -6,6 +6,7 @@
   <title>프로필 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/css/style.css" />
+  <script src="/js/theme.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -15,6 +16,7 @@
       <a href="/index.html">로비</a>
       <a href="/play.html">봇 대국</a>
       <a href="/puzzles.html">퍼즐</a>
+      <a href="/openings.html">오프닝</a>
       <a href="/analysis.html">분석</a>
       <a href="/profile.html" class="active">프로필</a>
       <a href="/admin.html" id="adminNavLink" class="hidden">관리자</a>
@@ -37,12 +39,28 @@
         <div class="stat-box"><div class="stat-num" id="pfWins">-</div><div class="stat-label">승</div></div>
         <div class="stat-box"><div class="stat-num" id="pfStreak">-</div><div class="stat-label">🔥 스트릭</div></div>
         <div class="stat-box"><div class="stat-num" id="pfOtb">-</div><div class="stat-label">OTB</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfPuzzle">-</div><div class="stat-label">🧩 퍼즐</div></div>
+        <div class="stat-box"><div class="stat-num" id="pfRush">-</div><div class="stat-label">⚡ 러시</div></div>
       </div>
       <div id="pfBioWrap" style="margin-top:12px;">
         <h3 style="margin-bottom:4px;">나에 대하여</h3>
         <p id="pfBio" class="muted">-</p>
       </div>
-      <h3 style="margin-top:14px;">최근 게임</h3>
+      <h3 style="margin-top:14px;">🏅 업적 <span class="muted" id="pfAchCount" style="font-size:0.8rem;font-weight:400;"></span></h3>
+      <div id="pfAchievements" class="ach-grid"><p class="muted">-</p></div>
+
+      <h3 style="margin-top:16px;">♟ 게임 아카이브</h3>
+      <div id="pfArchiveControls" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <select id="pfArcResult" style="width:auto;margin:0;">
+          <option value="">전체 결과</option>
+          <option value="1-0">백 승</option>
+          <option value="0-1">흑 승</option>
+          <option value="1/2-1/2">무승부</option>
+        </select>
+        <input type="text" id="pfArcOpp" placeholder="상대 이름" style="width:150px;margin:0;" />
+        <button class="btn small" id="pfArcSearch">검색</button>
+        <a class="btn small brown" id="pfArcDownload" href="/api/games/archive/pgn">⬇ PGN 전체 내려받기</a>
+      </div>
       <div id="pfRecent"><p class="muted">-</p></div>
       <div style="margin-top:14px;">
         <button class="btn" id="editBtn">✏️ 프로필 편집</button>
@@ -76,10 +94,11 @@
     <p class="muted center" id="loginNote" style="display:none;">프로필을 보려면 로그인하세요. <a href="/index.html">로비로</a></p>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 프로필 · v9</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 프로필 · v15</footer>
 
   <script src="/js/api.js"></script>
   <script src="/js/settings.js"></script>
+  <script src="/js/notifications.js"></script>
   <script src="/js/profile.js"></script>
 </body>
 </html>

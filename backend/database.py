@@ -33,6 +33,12 @@ def _migrate_columns() -> None:
             "username_changed_at": "DATETIME",
             "is_admin": "INTEGER DEFAULT 0",
             "banned": "INTEGER DEFAULT 0",
+            "puzzle_rating": "FLOAT DEFAULT 800",
+            "puzzles_solved": "INTEGER DEFAULT 0",
+            "puzzles_failed": "INTEGER DEFAULT 0",
+            "rush_best_3m": "INTEGER DEFAULT 0",
+            "rush_best_5m": "INTEGER DEFAULT 0",
+            "rush_best_survival": "INTEGER DEFAULT 0",
         },
     }
     try:

@@ -50,13 +50,26 @@ const KiwiSettings = (() => {
     const bg = document.createElement("div");
     bg.className = "modal-bg"; bg.id = "kiwiSettingsModal";
     bg.innerHTML = `
-      <div class="modal" style="text-align:left;max-width:400px;">
+      <div class="modal" style="text-align:left;max-width:420px;">
         <h2 style="text-align:center;">⚙️ 설정</h2>
-        <label style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+
+        <h3 style="margin-top:4px;">화면</h3>
+        <label>테마</label>
+        <select id="ksTheme" style="width:100%;">
+          <option value="auto">자동 (시스템 설정 따름)</option>
+          <option value="light">낮 — 과육</option>
+          <option value="dark">야행 — 키위새의 시간 🥝🌙</option>
+        </select>
+        <label>체스판 테마</label>
+        <select id="ksBoard" style="width:100%;"></select>
+
+        <h3 style="margin-top:12px;">소리</h3>
+        <label style="display:flex;flex-direction:row;align-items:center;gap:8px;margin:10px 0;">
           <input type="checkbox" id="ksSound" style="width:auto;margin:0;" /> 효과음 켜기
         </label>
         <label>효과음 볼륨: <span id="ksVolVal"></span>%</label>
         <input type="range" id="ksVolume" min="0" max="100" step="10" style="width:100%;" />
+        <h3 style="margin-top:12px;">분석 · 리뷰</h3>
         <label>리뷰 분석 속도 (수당 시간)</label>
         <select id="ksReviewMs" style="width:100%;">
           <option value="100">빠름 (100ms) — 정확도 낮음</option>
@@ -89,6 +102,19 @@ const KiwiSettings = (() => {
 
     const $ = (id) => document.getElementById(id);
     function sync() {
+      // 보드 테마 선택지 채우기
+      const bsel = $("ksBoard");
+      if (bsel && !bsel.options.length && window.KiwiTheme) {
+        KiwiTheme.BOARDS.forEach((b) => {
+          const o = document.createElement("option");
+          o.value = b.id; o.textContent = b.label;
+          bsel.appendChild(o);
+        });
+      }
+      if (window.KiwiTheme) {
+        $("ksTheme").value = KiwiTheme.getMode();
+        $("ksBoard").value = KiwiTheme.getBoard();
+      }
       $("ksSound").checked = get("soundOn");
       $("ksVolume").value = get("soundVolume");
       $("ksVolVal").textContent = get("soundVolume");
@@ -100,6 +126,12 @@ const KiwiSettings = (() => {
     btn.addEventListener("click", (e) => { e.preventDefault(); sync(); bg.classList.add("show"); });
     $("ksClose").addEventListener("click", () => bg.classList.remove("show"));
     bg.addEventListener("click", (e) => { if (e.target === bg) bg.classList.remove("show"); });
+    $("ksTheme").addEventListener("change", (e) => {
+      if (window.KiwiTheme) KiwiTheme.setMode(e.target.value);
+    });
+    $("ksBoard").addEventListener("change", (e) => {
+      if (window.KiwiTheme) KiwiTheme.setBoard(e.target.value);
+    });
     $("ksSound").addEventListener("change", (e) => set("soundOn", e.target.checked));
     $("ksVolume").addEventListener("input", (e) => { $("ksVolVal").textContent = e.target.value; set("soundVolume", parseInt(e.target.value, 10)); });
     $("ksReviewMs").addEventListener("change", (e) => set("reviewMovetime", parseInt(e.target.value, 10)));

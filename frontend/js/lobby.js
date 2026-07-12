@@ -177,20 +177,71 @@
   }
   setInterval(pollOnline, 5000);
 
+  // 내가 보낸 도전(취소 가능)
+  let outgoingChallenge = null;   // { id, username }
+  // 받은 도전 토스트: fromId -> element (취소되면 제거)
+  const incomingToasts = {};
+
   function challenge(player) {
     const minutes = parseInt($("tcMinutes").value, 10) || 10;
     const increment = parseInt($("tcIncrement").value, 10) || 0;
+    outgoingChallenge = { id: player.id, username: player.username };
     Socket.send({ type: "challenge", toId: player.id, minutes, increment });
-    showLoading("도전 전송", `${player.username} 님의 응답을 기다리는 중…`);
+    showChallengeWaiting(player.username);
+  }
+
+  /** 도전 대기 화면 — 취소 버튼 포함 */
+  function showChallengeWaiting(name) {
+    showLoading("도전 전송", `${name} 님의 응답을 기다리는 중…`);
+    const modal = document.querySelector("#loadingModal .modal");
+    if (!modal || modal.querySelector("#cancelChallengeBtn")) return;
+    const btn = document.createElement("button");
+    btn.className = "btn danger";
+    btn.id = "cancelChallengeBtn";
+    btn.textContent = "도전 취소";
+    btn.style.marginTop = "12px";
+    btn.addEventListener("click", cancelChallenge);
+    modal.appendChild(btn);
+  }
+
+  function cancelChallenge() {
+    if (!outgoingChallenge) { hideLoading(); return; }
+    Socket.send({ type: "challenge_cancel", toId: outgoingChallenge.id });
+    const name = outgoingChallenge.username;
+    outgoingChallenge = null;
+    hideLoading();
+    toast(`🚫 <b>${escapeHtml(name)}</b> 님에게 보낸 도전을 취소했습니다.`);
   }
 
   Socket.on("challenge_sent", (msg) => {
-    showLoading("도전 전송", `${msg.toName} 님의 응답을 기다리는 중…`);
+    outgoingChallenge = { id: msg.toId, username: msg.toName };
+    showChallengeWaiting(msg.toName);
   });
 
   Socket.on("challenge_declined", (msg) => {
+    outgoingChallenge = null;
     hideLoading();
     toast(`😢 <b>${escapeHtml(msg.byName)}</b> 님이 도전을 거절했습니다.`);
+  });
+
+  // 도전 취소 알림 (내가 취소했거나, 상대가 취소함)
+  Socket.on("challenge_cancelled", (msg) => {
+    if (msg.byMe) {
+      outgoingChallenge = null;
+      hideLoading();
+      return;
+    }
+    // 상대가 보낸 도전이 취소됨 → 받은 도전 토스트 제거
+    const el = incomingToasts[msg.fromId];
+    if (el) { el.remove(); delete incomingToasts[msg.fromId]; }
+    const extra = msg.message ? ` (${escapeHtml(msg.message)})` : "";
+    toast(`🚫 <b>${escapeHtml(msg.fromName || "상대")}</b> 님이 도전을 취소했습니다.${extra}`);
+  });
+
+  // 이미 사라진 도전에 응답한 경우
+  Socket.on("challenge_gone", (msg) => {
+    hideLoading();
+    toast(`⚠️ ${escapeHtml(msg.message || "이 도전은 더 이상 유효하지 않습니다.")}`);
   });
 
   // ---- 도전 수신 ----
@@ -205,25 +256,38 @@
        </div>`,
       { challenge: true, persist: true }
     );
+    incomingToasts[msg.fromId] = el;
     el.querySelector("[data-accept]").onclick = () => {
       Socket.send({ type: "challenge_response", fromId: msg.fromId, accept: true,
                     minutes: msg.minutes || 10, increment: msg.increment || 0 });
       el.remove();
+      delete incomingToasts[msg.fromId];
       showLoading("대국 준비 중", "체스판을 차리는 중…");
     };
     el.querySelector("[data-decline]").onclick = () => {
       Socket.send({ type: "challenge_response", fromId: msg.fromId, accept: false });
       el.remove();
+      delete incomingToasts[msg.fromId];
     };
   });
+
+  // 대국이 시작되면 대기 상태 정리
+  Socket.on("game_start", () => { outgoingChallenge = null; });
 
   // ---- 로딩 모달 ----
   function showLoading(title, text) {
     $("loadingTitle").textContent = title;
     $("loadingText").textContent = text;
+    // 도전 취소 버튼은 도전 대기 상황에서만 보인다
+    const old = document.getElementById("cancelChallengeBtn");
+    if (old) old.remove();
     $("loadingModal").classList.add("show");
   }
-  function hideLoading() { $("loadingModal").classList.remove("show"); }
+  function hideLoading() {
+    $("loadingModal").classList.remove("show");
+    const old = document.getElementById("cancelChallengeBtn");
+    if (old) old.remove();
+  }
   window.kiwiShowLoading = showLoading;
   window.kiwiHideLoading = hideLoading;
 
@@ -254,7 +318,31 @@
     return String(s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
-  window.kiwiEscapeHtml = escapeHtml;
+  // 전역 이스케이프는 api.js 에서 정의됨(중복 정의 제거)
+
+
+  // ---- 사이트 공지(MOTD) + 관리자 방송 ----
+  async function loadMotd() {
+    try {
+      const site = await API.site();
+      if (site.motd) {
+        const b = $("motdBanner");
+        b.textContent = "📢 " + site.motd;
+        b.classList.remove("hidden");
+      }
+    } catch (e) { /* noop */ }
+  }
+  loadMotd();
+
+  if (typeof Socket !== "undefined") {
+    Socket.on("announce", (msg) => {
+      if (window.kiwiToast) {
+        window.kiwiToast(`📢 <b>공지</b>: ${window.kiwiEscapeHtml(msg.text)}`);
+      }
+      const b = $("motdBanner");
+      if (b) { b.textContent = "📢 " + msg.text; b.classList.remove("hidden"); }
+    });
+  }
 
   // ---- 자동 로그인 (세션 복원) ----
   setAuthMode("login");

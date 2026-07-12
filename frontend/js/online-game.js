@@ -1,5 +1,8 @@
 /* index.html 온라인 대국 로직 (WebSocket 실시간 대국 + 서버 클럭 + 채팅 + 무승부) */
 (function () {
+  let lastOpponent = null;   // 재대국 상대 { id, username }
+  let lastTC = { minutes: 10, increment: 0 };
+  let lastOpeningKey = "";
   const $ = (id) => document.getElementById(id);
 
   let board = null;
@@ -64,6 +67,7 @@
   }
 
   function renderMoves() {
+    updateOpeningName();
     const hist = game.history();
     let html = "";
     for (let i = 0; i < hist.length; i += 2) {
@@ -138,6 +142,18 @@
     const me = API.getUser();
     $("meLabel").textContent = `🥝 ${me ? me.username : "나"} (${me ? me.rating : ""})`;
     $("opponentLabel").textContent = `🥝 ${msg.opponent.name} (${msg.opponent.rating})`;
+
+    // 재대국을 위해 상대와 시간제어 기억
+    if (msg.opponent && msg.opponent.id) {
+      lastOpponent = { id: msg.opponent.id, username: msg.opponent.name };
+    }
+    lastTC = {
+      minutes: Math.round((msg.clocks && msg.clocks.white ? msg.clocks.white : 600000) / 60000),
+      increment: msg.increment || 0,
+    };
+    lastOpeningKey = "";
+    const opEl = document.getElementById("openingLive");
+    if (opEl) opEl.textContent = "";
 
     if (window.kiwiShowGame) window.kiwiShowGame();
 
@@ -298,6 +314,35 @@
   }
   $("resultOk").addEventListener("click", backToLobby);
   $("backToLobbyBtn").addEventListener("click", backToLobby);
+  // ---- 오프닝 이름 실시간 표시 ----
+  async function updateOpeningName() {
+    const el = document.getElementById("openingLive");
+    if (!el || !game) return;
+    const hist = game.history();
+    if (!hist.length || hist.length > 24) { return; }
+    const key = hist.join(",");
+    if (key === lastOpeningKey) return;
+    lastOpeningKey = key;
+    try {
+      const data = await API.openings(hist);
+      if (data && data.opening) el.textContent = `📖 ${data.opening.en} (${data.opening.eco})`;
+    } catch (e) { /* noop */ }
+  }
+
+  // ---- 재대국 ----
+  $("resultRematch").addEventListener("click", () => {
+    if (!lastOpponent) {
+      if (window.kiwiToast) window.kiwiToast("⚠️ 재대국 상대를 찾을 수 없습니다.");
+      return;
+    }
+    Socket.send({ type: "rematch", toId: lastOpponent.id,
+                  minutes: lastTC.minutes || 10, increment: lastTC.increment || 0 });
+    $("resultModal").classList.remove("show");
+    if (window.kiwiShowLoading) {
+      window.kiwiShowLoading("재대국 신청", `${lastOpponent.username} 님의 응답을 기다리는 중…`);
+    }
+  });
+
   $("resultReview").addEventListener("click", () => {
     try { if (game) localStorage.setItem("kiwi_review_pgn", game.pgn()); } catch (e) {}
     location.href = "/analysis.html";
