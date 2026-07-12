@@ -103,8 +103,16 @@
     return ev.cp != null ? ev.cp : 0;
   }
   function scoreToText(cp) {
-    if (cp >= MATE - 5000) return "+M";
-    if (cp <= -MATE + 5000) return "-M";
+    // cp 인코딩: 백이 N수 후 메이트 → MATE - N*100 / 흑이 N수 후 메이트 → -MATE + N*100
+    // 이미 외통난 국면은 정확히 ±MATE (N=0)
+    if (cp >= MATE - 5000) {
+      const n = Math.round((MATE - cp) / 100);
+      return n <= 0 ? "#" : "+M" + n;
+    }
+    if (cp <= -MATE + 5000) {
+      const n = Math.round((cp + MATE) / 100);
+      return n <= 0 ? "#" : "-M" + n;
+    }
     const v = cp / 100;
     return (v >= 0 ? "+" : "") + v.toFixed(2);
   }

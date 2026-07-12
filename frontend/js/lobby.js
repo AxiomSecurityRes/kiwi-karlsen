@@ -97,6 +97,7 @@
     showLobby();
     Socket.connect(token);
     if (window.kiwiStartFriends) window.kiwiStartFriends();
+    if (window.kiwiRevealAdmin) window.kiwiRevealAdmin();
     // 접속 활동으로 스트릭 갱신 후 최신값 반영
     API.streakPing().then((res) => {
       if (res && res.streak) {
@@ -122,6 +123,8 @@
     e.preventDefault();
     Socket.close();
     API.clearSession();
+    try { localStorage.removeItem("kiwi_is_admin"); } catch (err) {}
+    if (window.kiwiRevealAdmin) window.kiwiRevealAdmin();
     location.reload();
   });
 

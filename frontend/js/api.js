@@ -153,3 +153,7 @@ window.kiwiPieceTheme = function (piece) {
     "font-family='Arial,Segoe UI Symbol,sans-serif'>" + glyphs[type] + "</text></svg>";
   return "data:image/svg+xml," + encodeURIComponent(svg);
 };
+
+// 다른 스크립트에서 window.API 로도 접근할 수 있게 노출
+// (const 선언은 window 프로퍼티가 되지 않으므로 명시적으로 붙인다)
+window.API = API;

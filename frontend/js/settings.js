@@ -144,17 +144,52 @@ const KiwiSettings = (() => {
   else { injectUI(); apply(); revealAdmin(); }
 
   // 관리자면 상단 '관리자' 링크 표시 (모든 페이지 공통)
-  function revealAdmin() {
-    try {
-      const link = document.getElementById("adminNavLink");
-      if (!link || !window.API || !API.getToken()) return;
-      const u = API.getUser && API.getUser();
-      if (u && u.isAdmin) { link.classList.remove("hidden"); return; }
-      API.profileMe().then((r) => {
-        if (r && r.profile && r.profile.isAdmin) link.classList.remove("hidden");
-      }).catch(() => {});
-    } catch (e) {}
+  // 깜빡임 방지: 마지막으로 확인된 관리자 여부를 저장해 두고 즉시 반영한 뒤,
+  // 서버 응답으로 최종 확정한다.
+  const ADMIN_CACHE_KEY = "kiwi_is_admin";
+
+  function setAdminLink(show) {
+    const link = document.getElementById("adminNavLink");
+    if (!link) return;
+    link.classList.toggle("hidden", !show);
   }
+
+  function revealAdmin() {
+    const link = document.getElementById("adminNavLink");
+    if (!link) return;
+    if (typeof API === "undefined" || !API.getToken()) {
+      setAdminLink(false);
+      try { localStorage.removeItem(ADMIN_CACHE_KEY); } catch (e) {}
+      return;
+    }
+
+    // 1) 즉시 반영 (저장된 세션 정보 또는 캐시)
+    let optimistic = false;
+    try {
+      const u = API.getUser && API.getUser();
+      if (u && u.isAdmin) optimistic = true;
+      else if (localStorage.getItem(ADMIN_CACHE_KEY) === "1") optimistic = true;
+    } catch (e) {}
+    setAdminLink(optimistic);
+
+    // 2) 서버로 최종 확인 (권한이 바뀌었을 수도 있으므로)
+    API.profileMe().then((r) => {
+      const isAdmin = !!(r && r.profile && r.profile.isAdmin);
+      setAdminLink(isAdmin);
+      try { localStorage.setItem(ADMIN_CACHE_KEY, isAdmin ? "1" : "0"); } catch (e) {}
+      // 세션에 저장된 사용자 정보도 최신화
+      try {
+        const u = API.getUser();
+        if (u && u.isAdmin !== isAdmin) {
+          u.isAdmin = isAdmin;
+          API.setSession(API.getToken(), u);
+        }
+      } catch (e) {}
+    }).catch(() => { /* 네트워크 오류 시 낙관적 표시 유지 */ });
+  }
+
+  // 로그인/로그아웃 직후에도 다시 판정할 수 있게 노출
+  window.kiwiRevealAdmin = revealAdmin;
 
   return { get, set };
 })();

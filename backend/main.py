@@ -152,6 +152,25 @@ async def security_middleware(request: Request, call_next):
     response = await call_next(request)
     for k, v in security.SECURITY_HEADERS.items():
         response.headers[k] = v
+
+    # ---- 캐시 제어 ----
+    # 앱 코드(HTML/JS/CSS)는 재배포 즉시 반영돼야 한다.
+    # 브라우저가 옛 api.js 를 쥐고 있으면 "API.xxx is not a function" 같은 오류가 난다.
+    # 반면 엔진 WASM/폰트/이미지 같은 큰 정적 자원은 오래 캐시해도 안전하다.
+    if not path.startswith("/api/"):
+        lower = path.lower()
+        if lower.endswith((".html", ".js", ".css")) or lower in ("/", ""):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+        elif lower.startswith("/assets/engine/"):
+            # 엔진(stockfish.wasm 등)은 크고 잘 바뀌지 않는다
+            response.headers["Cache-Control"] = "public, max-age=604800"
+        elif lower.endswith((".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico", ".woff", ".woff2", ".mp3", ".ogg", ".wav")):
+            response.headers["Cache-Control"] = "public, max-age=86400"
+    else:
+        # API 응답은 캐시하지 않는다
+        response.headers["Cache-Control"] = "no-store"
+
     return response
 
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
