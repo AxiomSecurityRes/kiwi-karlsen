@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="kiwi-version" content="28" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Kiwi Karlsen 시작 가이드와 업데이트 내역." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="Kiwi Karlsen 시작 가이드와 업데이트 내역." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
+  <title>가이드 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/guide.html?v=26" class="active">가이드</a>
+      <a href="/terms.html?v=26">약관</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="admin-tabs">
+      <button class="tab-btn active" data-tab="tabStart">🚀 시작하기</button>
+      <button class="tab-btn" data-tab="tabFeatures">📚 기능 안내</button>
+      <button class="tab-btn" data-tab="tabChangelog">🗒 업데이트 내역</button>
+    </div>
+
+    <!-- 시작하기 -->
+    <section id="tabStart" class="tab-pane">
+      <div class="card doc">
+        <h2>🥝 Kiwi Karlsen에 오신 것을 환영합니다</h2>
+        <p>체스를 두고, 풀고, 배우고, 분석하는 곳입니다. 처음이라면 아래 순서를 따라가 보세요.</p>
+
+        <div class="guide-steps">
+          <div class="gstep">
+            <span class="gs-num">1</span>
+            <div>
+              <b>계정 만들기</b>
+              <p>로비에서 회원가입하세요. 이메일은 필요 없습니다. 비밀번호는 8자 이상,
+                문자 종류 2가지 이상이어야 합니다. <b>2단계 인증(2FA)</b>을 켜두면 훨씬 안전합니다.</p>
+            </div>
+          </div>
+          <div class="gstep">
+            <span class="gs-num">2</span>
+            <div>
+              <b>봇과 첫 대국</b>
+              <p><a href="/play.html?v=28">봇 대국</a>에서 11단계 키위 봇 중 하나를 고르거나,
+                <b>ELO 슬라이더</b>(100~3200)로 원하는 실력의 상대를 직접 지정하세요.
+                막히면 💡 힌트, ↩ 무르기를 쓸 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="gstep">
+            <span class="gs-num">3</span>
+            <div>
+              <b>대국 후 반드시 리뷰</b>
+              <p>대국이 끝나면 <b>📊 게임 리뷰</b> 버튼을 누르세요. 모든 수를
+                탁월/훌륭/최선/…/블런더 11단계로 분류하고 정확도와 예상 레이팅을 알려줍니다.
+                실력 향상의 핵심입니다.</p>
+            </div>
+          </div>
+          <div class="gstep">
+            <span class="gs-num">4</span>
+            <div>
+              <b>매일 퍼즐로 전술 감각 기르기</b>
+              <p><a href="/puzzles.html?v=28">퍼즐</a>에서 훈련·일일 퍼즐·러시·전투를 즐기세요.
+                퍼즐 레이팅이 따로 매겨집니다. 연습 모드로 두면 레이팅에 반영되지 않습니다.</p>
+            </div>
+          </div>
+          <div class="gstep">
+            <span class="gs-num">5</span>
+            <div>
+              <b>오프닝 익히기</b>
+              <p><a href="/openings.html?v=28">오프닝</a>에서 3,800여 종의 정석을 탐색하고,
+                <b>배우기</b> 탭에서 커리큘럼을 따라 외워보세요. 퀴즈에서 90점을 넘기면 마스터입니다.</p>
+            </div>
+          </div>
+          <div class="gstep">
+            <span class="gs-num">6</span>
+            <div>
+              <b>통찰로 약점 찾기</b>
+              <p><a href="/insights.html?v=26">통찰</a>에서 내가 잘 두는 오프닝과 약한 오프닝,
+                시간대별 성적, 정확도 추이를 확인하세요.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="doc-note">
+          💡 <b>팁</b>: 상단 🌙 버튼으로 야행(다크) 모드를, ⚙️ 설정에서 체스판 테마와 엔진 깊이를
+          바꿀 수 있습니다. 모바일에서는 기물을 탭하면 갈 수 있는 칸이 점으로 표시됩니다.
+        </div>
+      </div>
+    </section>
+
+    <!-- 기능 안내 -->
+    <section id="tabFeatures" class="tab-pane hidden">
+      <div class="card doc">
+        <h2>📚 기능 안내</h2>
+
+        <h3>♟ 대국</h3>
+        <ul>
+          <li><b>온라인 대국</b> — 로비에서 접속 중인 사용자에게 도전. 시간 제어 설정, 도전 취소, 재대국 가능.
+            Glicko-2 레이팅이 적용됩니다.</li>
+          <li><b>봇 대국</b> — 11단계(입문 500 ~ Super GM 2700, 최고 난이도 2900).
+            GM·IM·FM·CM 등 정식 타이틀 기준 레이팅입니다. ELO 슬라이더로 직접 지정도 가능합니다.</li>
+        </ul>
+
+        <h3>🧩 퍼즐</h3>
+        <ul>
+          <li><b>훈련</b> — 레이팅·유형(테마)별로 골라 풀기. 퍼즐 레이팅이 Elo로 갱신됩니다.</li>
+          <li><b>일일 퍼즐</b> — 모두가 같은 문제를 하루 한 번.</li>
+          <li><b>퍼즐 러시</b> — 3분/5분/서바이벌. 3번 틀리면 종료.</li>
+          <li><b>퍼즐 전투</b> — 다른 사용자와 <b>같은 퍼즐 세트</b>로 실시간 1:1 대결.</li>
+        </ul>
+
+        <h3>👁️ 시각 훈련</h3>
+        <ul>
+          <li><b>좌표 모드</b> — 30초 안에 표시된 칸을 최대한 많이 클릭.</li>
+          <li><b>수순 모드</b> — 표시된 수(예: Nf3)의 도착 칸 맞히기.</li>
+        </ul>
+
+        <h3>📖 오프닝</h3>
+        <ul>
+          <li><b>탐색기</b> — 수순별 <b>게임 수와 승률</b>을 봅니다. 레이팅 범위·시간 제어로 필터링.
+            Lichess 수백만 판 데이터 + 이 사이트의 게임 통계.</li>
+          <li><b>배우기</b> — 7단계 커리큘럼 36개 오프닝. 학습 후 퀴즈로 암기 확인.</li>
+        </ul>
+
+        <h3>📊 분석 · 통찰</h3>
+        <ul>
+          <li><b>분석 보드</b> — Stockfish 엔진 내장. 실시간 평가, 최선수 추천, 평가 그래프.</li>
+          <li><b>게임 리뷰</b> — 11단계 분류(탁월한 수/훌륭한 수/최선의 수/뛰어난 수/좋은 수/이론/강제/
+            부정확한 수/실수/놓친 수/블런더), 정확도, 예상 레이팅.</li>
+          <li><b>통찰</b> — 레이팅 추이, 색깔별·시간제어별·상대별 성적, 오프닝 성과,
+            정확도 추이, 활동 히트맵 등 12가지 분석.</li>
+        </ul>
+
+        <h3>👥 커뮤니티</h3>
+        <ul>
+          <li><b>친구</b> — 친구 추가 및 언제든 DM 채팅.</li>
+          <li><b>클럽</b> — 클럽 생성·가입, 공지물, 채팅, <b>국면/기보를 클럽 보드로 공유</b>.</li>
+          <li><b>사용자 찾기</b> — 다른 사용자의 전적·레이팅·최근 경기 조회.</li>
+          <li><b>업적</b> — 70여 종. 프로필에서 탭하면 달성 조건이 보입니다.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 업데이트 내역 -->
+    <section id="tabChangelog" class="tab-pane hidden">
+      <div class="card doc">
+        <h2>🗒 업데이트 내역</h2>
+        <p class="muted">현재 버전: <b id="curVer">-</b></p>
+
+        <div class="changelog">
+          <div class="cl-item">
+            <span class="cl-ver">v26</span>
+            <div>
+              <b>보안 대폭 강화 + 약관/가이드</b>
+              <ul>
+                <li>비밀번호 해싱을 <b>scrypt + 페퍼</b>로 교체 (기존 해시는 로그인 시 자동 업그레이드)</li>
+                <li><b>2단계 인증(TOTP)</b> + 백업 코드 10개</li>
+                <li>비밀번호 변경·전체 로그아웃 시 <b>모든 기기 토큰 즉시 폐기</b></li>
+                <li><b>WebSocket Origin 검증</b>(CSWSH 방어), HSTS·COOP·CORP 헤더</li>
+                <li>모든 API 입력을 엄격한 스키마로 검증, 봇 허니팟, IP당 가입 상한</li>
+                <li>이용약관·개인정보 처리방침·보안 수준 공개, 데이터 내보내기, 회원 탈퇴</li>
+              </ul>
+            </div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v25</span>
+            <div><b>통찰(Insights)</b> — 레이팅 추이, 색깔·시간제어·상대별 성적, 오프닝 성과,
+              정확도 추이, 수 분류 도넛, 활동 히트맵 등 12가지 분석</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v24</span>
+            <div><b>체스 클럽</b> — 생성·가입·권한(개설자/운영진/구성원), 공지물, 채팅,
+              국면·기보를 띄우는 클럽 보드</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v23</span>
+            <div><b>퍼즐 전투</b>(실시간 1:1) + <b>시각 훈련</b>(30초 좌표/수순 스피드런)</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v22</span>
+            <div><b>오프닝 탐색기 개편</b> — 수순별 게임 수·승률, 레이팅 범위 필터,
+              7단계 오프닝 배우기 커리큘럼</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v21</span>
+            <div><b>엔진 평가 안정화</b> — Stockfish의 tempo 보너스를 보정해
+              "차례인 쪽이 항상 유리하게 보이던" 톱니파 제거. 고정 깊이 탐색 + 평가 캐시</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v19–20</span>
+            <div>Stockfish 엔진 번들, 오프닝 3,803종(Lichess DB), 봇 레이팅 정식 타이틀 기준,
+              사용자 찾기, 업적 확장</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v10–18</span>
+            <div>보안 계층 도입, 관리자 전권, 다크 모드·보드 테마, 퍼즐 레이팅·일일 퍼즐·러시,
+              업적·알림, PGN 아카이브, 캐시 무효화</div>
+          </div>
+          <div class="cl-item">
+            <span class="cl-ver">v1–9</span>
+            <div>온라인 대국(WebSocket), 봇 대국, 퍼즐, 게임 리뷰, 친구·DM, 프로필, 관리자 모드</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 가이드 · v28</footer>
+
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/tabs.js?v=28"></script>
+  <script src="/js/guide.js?v=28"></script>
+</body>
+</html>

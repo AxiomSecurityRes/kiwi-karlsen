@@ -23,6 +23,20 @@ def _migrate_columns() -> None:
     """기존 DB에 새로 추가된 컬럼이 없으면 ALTER TABLE 로 추가."""
     from sqlalchemy import text
     wanted = {
+        "game_reviews": {
+            "tactics_total": "INTEGER DEFAULT 0",
+            "tactics_found": "INTEGER DEFAULT 0",
+            "opponent_accuracy": "FLOAT DEFAULT 0",
+            "result": "VARCHAR(6) DEFAULT ''",
+            "end_phase": "VARCHAR(12) DEFAULT ''",
+        },
+        "games": {
+            "minutes": "INTEGER DEFAULT 0",
+            "increment": "INTEGER DEFAULT 0",
+            "ply_count": "INTEGER DEFAULT 0",
+            "white_rating_after": "FLOAT DEFAULT 0",
+            "black_rating_after": "FLOAT DEFAULT 0",
+        },
         "users": {
             "first_name": "VARCHAR(40) DEFAULT ''",
             "last_name": "VARCHAR(40) DEFAULT ''",
@@ -39,6 +53,17 @@ def _migrate_columns() -> None:
             "rush_best_3m": "INTEGER DEFAULT 0",
             "rush_best_5m": "INTEGER DEFAULT 0",
             "rush_best_survival": "INTEGER DEFAULT 0",
+            "battle_wins": "INTEGER DEFAULT 0",
+            "battle_losses": "INTEGER DEFAULT 0",
+            "vision_best_coords": "INTEGER DEFAULT 0",
+            "vision_best_moves": "INTEGER DEFAULT 0",
+            "token_version": "INTEGER DEFAULT 1",
+            "totp_secret": "VARCHAR(64) DEFAULT ''",
+            "totp_enabled": "INTEGER DEFAULT 0",
+            "backup_codes": "TEXT DEFAULT ''",
+            "terms_accepted_at": "DATETIME",
+            "last_login_at": "DATETIME",
+            "password_changed_at": "DATETIME",
         },
     }
     try:

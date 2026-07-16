@@ -52,6 +52,7 @@
       if (profile.isAdmin) $("adminNavLink").classList.remove("hidden");
       loadAchievements(profile.username, true);
       loadArchive();
+      loadSecurity();
       // 편집 폼 채우기
       $("edFirst").value = profile.firstName || "";
       $("edLast").value = profile.lastName || "";
@@ -185,5 +186,118 @@
 
   window.kiwiLoadAchievements = loadAchievements;
   window.kiwiLoadArchive = loadArchive;
+
+
+
+  /* ==================== 🔐 계정 보안 ==================== */
+  async function loadSecurity() {
+    if (!API.getToken()) return;
+    $("securityCard").classList.remove("hidden");
+    try {
+      const s = await API.accountSecurity();
+      const fmt = (t) => t ? t.replace("T", " ").slice(0, 16) : "-";
+      $("secStatus").innerHTML = `
+        <div class="stat-box"><div class="stat-num">${s.twoFactor ? "✅" : "❌"}</div><div class="stat-label">2단계 인증</div></div>
+        <div class="stat-box"><div class="stat-num" style="font-size:0.8rem;">${esc(fmt(s.lastLoginAt))}</div><div class="stat-label">마지막 로그인</div></div>
+        <div class="stat-box"><div class="stat-num" style="font-size:0.8rem;">${esc(fmt(s.passwordChangedAt))}</div><div class="stat-label">비밀번호 변경</div></div>`;
+
+      $("twoFaOff").classList.toggle("hidden", s.twoFactor);
+      $("twoFaOn").classList.toggle("hidden", !s.twoFactor);
+      $("twoFaSetup").classList.add("hidden");
+      $("tfBackupLeft").textContent = s.twoFactor ? `(백업 코드 ${s.backupCodesLeft}개 남음)` : "";
+    } catch (e) { /* noop */ }
+  }
+
+  $("tfSetupBtn").addEventListener("click", async () => {
+    try {
+      const r = await API.twoFactorSetup();
+      $("tfSecret").textContent = r.secret;
+      $("twoFaOff").classList.add("hidden");
+      $("twoFaSetup").classList.remove("hidden");
+      $("tfError").textContent = "";
+    } catch (e) { alert(e.message); }
+  });
+
+  $("tfCancelBtn").addEventListener("click", () => {
+    $("twoFaSetup").classList.add("hidden");
+    $("twoFaOff").classList.remove("hidden");
+  });
+
+  $("tfEnableBtn").addEventListener("click", async () => {
+    $("tfError").textContent = "";
+    try {
+      const r = await API.twoFactorEnable($("tfCode").value.trim());
+      $("tfBackupCodes").classList.remove("hidden");
+      $("tfBackupCodes").innerHTML =
+        "<b>⚠️ 백업 코드 — 지금 딱 한 번만 보여집니다. 안전한 곳에 저장하세요.</b>" +
+        "<div class='bc-grid'>" + r.backupCodes.map((c) => `<code>${esc(c)}</code>`).join("") + "</div>" +
+        "<p class='muted'>인증 앱을 잃어버렸을 때 이 코드로 로그인할 수 있습니다. 각 코드는 1회만 사용됩니다.</p>";
+      $("tfCode").value = "";
+      loadSecurity();
+    } catch (e) { $("tfError").textContent = e.message; }
+  });
+
+  $("tfDisableBtn").addEventListener("click", async () => {
+    if (!confirm("2단계 인증을 끄면 계정 보안이 약해집니다. 계속할까요?")) return;
+    try {
+      await API.twoFactorDisable($("tfDisablePw").value);
+      $("tfDisablePw").value = "";
+      $("tfBackupCodes").classList.add("hidden");
+      loadSecurity();
+    } catch (e) { alert(e.message); }
+  });
+
+  $("pwChangeBtn").addEventListener("click", async () => {
+    $("pwMsg").textContent = "";
+    try {
+      const r = await API.accountPassword($("pwCurrent").value, $("pwNew").value);
+      // 새 토큰으로 세션 갱신 (현재 기기는 유지)
+      const u = API.getUser();
+      API.setSession(r.token, u);
+      $("pwCurrent").value = ""; $("pwNew").value = "";
+      $("pwMsg").style.color = "var(--accent-strong)";
+      $("pwMsg").textContent = r.message;
+      loadSecurity();
+    } catch (e) {
+      $("pwMsg").style.color = "var(--danger)";
+      $("pwMsg").textContent = e.message;
+    }
+  });
+
+  $("logoutAllBtn").addEventListener("click", async () => {
+    if (!confirm("모든 기기에서 로그아웃하시겠습니까? (현재 기기는 유지됩니다)")) return;
+    try {
+      const r = await API.accountLogoutAll();
+      API.setSession(r.token, API.getUser());
+      alert("모든 기기에서 로그아웃되었습니다.");
+    } catch (e) { alert(e.message); }
+  });
+
+  $("exportBtn").addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/account/export", {
+        headers: { Authorization: "Bearer " + API.getToken() },
+      });
+      if (!res.ok) throw new Error("내보내기에 실패했습니다.");
+      const text = await res.text();
+      const blob = new Blob([text], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "kiwi_my_data.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert(e.message); }
+  });
+
+  $("deleteBtn").addEventListener("click", async () => {
+    $("delMsg").textContent = "";
+    if (!confirm("정말 계정을 영구 삭제하시겠습니까? 되돌릴 수 없습니다.")) return;
+    try {
+      await API.accountDelete($("delPw").value, $("delConfirm").value.trim());
+      API.clearSession();
+      alert("계정이 삭제되었습니다. 그동안 이용해주셔서 감사합니다.");
+      location.href = "/index.html";
+    } catch (e) { $("delMsg").textContent = e.message; }
+  });
 
 })();

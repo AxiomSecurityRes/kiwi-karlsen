@@ -1,4 +1,5 @@
 import os
+import json
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect, Request
@@ -7,20 +8,27 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from . import (achievements, auth, bots, engine, friends, openings, puzzles,
-               security, sitesettings, streak, training)
+from . import (achievements, auth, bots, clubs, engine, explorer, friends, insights,
+               learn, openings, puzzles, security, sitesettings, streak, training,
+               vision)
 from datetime import datetime, timedelta
 
 from .config import settings
 from .database import SessionLocal, get_db, init_db
-from .models import (AdminAction, DirectMessage, Friendship, Game, Notification,
-                     PuzzleAttempt, RushSession, SecurityEvent, SiteSetting, User)
+from .models import (AdminAction, BattleSession, Club, ClubMember, ClubMessage,
+                     ClubPost, DirectMessage, ExplorerCache, Friendship, Game,
+                     GameReview, Notification, OpeningProgress, PuzzleAttempt,
+                     RushSession, SecurityEvent, SiteSetting, User, VisionScore)
 from .realtime import server
-from .schemas import (AdminFriendAdd, AdminPasswordReset, AdminStatsUpdate,
+from .schemas import (AccountDelete, AdminFriendAdd, AdminPasswordReset, AdminStatsUpdate,
                       AdminStreakUpdate, AdminUserUpdate, AnnounceBody, BotMoveRequest,
                       DailySolveBody, DMBody, FriendRequestBody, FriendRespondBody,
                       LoginRequest, ProfileUpdate, PuzzleSolvedRequest, RushResultBody,
-                      SettingUpdate, UsernameChange)
+                      SettingUpdate, UsernameChange,
+                      ClubCreate, ClubKickBody, ClubMessageBody, ClubPinBody,
+                      ClubPostBody, ClubRoleBody, LearnResultBody, LoginRequest2FA,
+                      OpeningsBookBody, PasswordChange, RegisterRequest, ReviewSave,
+                      TotpDisable, TotpVerify, VisionResultBody)
 
 
 @asynccontextmanager
@@ -195,9 +203,10 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     user_id = auth.get_user_id_by_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="인증이 필요합니다.")
-    user = db.query(User).filter(User.id == user_id).first()
+    # token_version 까지 대조 → 비밀번호 변경/전체 로그아웃으로 폐기된 토큰은 거부
+    user = auth.user_from_token(db, token)
     if not user:
-        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+        raise HTTPException(status_code=401, detail="세션이 만료되었습니다. 다시 로그인해주세요.")
     if user.banned:
         raise HTTPException(status_code=403, detail="정지된 계정입니다.")
     return user
@@ -211,33 +220,50 @@ def admin_user(user: User = Depends(current_user)) -> User:
 
 # ---------- 인증 라우트 ----------
 @app.post("/api/register")
-def register(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    if not req.password:
-        raise HTTPException(status_code=400, detail="비밀번호를 입력해주세요.")
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    # 허니팟: 사람에겐 보이지 않는 필드. 봇이 채우면 성공한 척하고 조용히 거부.
+    if req.website:
+        _log_security("honeypot", request=request, username=req.username[:40])
+        raise HTTPException(status_code=400, detail="가입에 실패했습니다.")
+
     if not sitesettings.get("registration_open", True):
         raise HTTPException(status_code=403, detail="현재 신규 회원가입이 중지되었습니다.")
+
+    if not req.acceptTerms:
+        raise HTTPException(status_code=400, detail="이용약관과 개인정보 처리방침에 동의해주세요.")
+
+    # IP 당 하루 가입 상한 (대량 계정 생성 방지)
+    ip_hash = security.hash_ip(_client_ip(request))
+    if not security.signup_allowed(ip_hash):
+        _log_security("signup_limit", request=request, username=req.username[:40])
+        raise HTTPException(status_code=429, detail="오늘은 더 이상 가입할 수 없습니다. 내일 다시 시도해주세요.")
+
     if security.is_weak_password(req.password):
         raise HTTPException(status_code=400, detail="너무 흔한 비밀번호입니다. 다른 비밀번호를 사용해주세요.")
+
     user, err = auth.register(db, req.username, req.password)
     if err:
         raise HTTPException(status_code=400, detail=err)
-    # 첫 사용자 또는 지정된 관리자 이름이면 관리자 권한 부여
+
+    security.record_signup(ip_hash)
+    user.terms_accepted_at = datetime.utcnow()
+    user.last_login_at = datetime.utcnow()
+    user.password_changed_at = datetime.utcnow()
+
     total_users = db.query(User).count()
     if total_users == 1 or user.username.lower() == settings.ADMIN_USERNAME.lower():
         user.is_admin = 1
     streak.update_streak(user)
     db.commit()
+    _log_security("signup", request=request, user_id=user.id, username=user.username)
     token = auth.issue_token(user)
     return {"token": token, "user": user.public_dict()}
 
 
 @app.post("/api/login")
-def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    if not req.password:
-        raise HTTPException(status_code=400, detail="비밀번호를 입력해주세요.")
+def login(req: LoginRequest2FA, request: Request, db: Session = Depends(get_db)):
     ip_hash = security.hash_ip(_client_ip(request))
 
-    # 무차별 대입 방어: 잠금 중이면 즉시 거부
     locked = security.login_locked(ip_hash, req.username)
     if locked:
         _log_security("login_locked", request=request, username=req.username,
@@ -251,16 +277,36 @@ def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
         _log_security("login_failed", request=request, username=req.username,
                       detail=f"lock={lock_for}s" if lock_for else "")
         raise HTTPException(status_code=401, detail=err)
+
     if user.banned:
         _log_security("banned_login", request=request, user_id=user.id, username=user.username)
         raise HTTPException(status_code=403, detail="정지된 계정입니다.")
+
+    # 2단계 인증
+    if user.totp_enabled:
+        if not req.code:
+            # 비밀번호는 맞았지만 2FA 코드가 필요하다는 신호
+            return {"twoFactorRequired": True}
+        ok = auth.verify_totp(user.totp_secret, req.code)
+        if not ok:
+            ok = auth.consume_backup_code(user, req.code)
+            if ok:
+                db.commit()
+                _log_security("2fa_backup_used", request=request, user_id=user.id,
+                              username=user.username)
+        if not ok:
+            security.record_login_failure(ip_hash, req.username)
+            _log_security("2fa_failed", request=request, user_id=user.id, username=user.username)
+            raise HTTPException(status_code=401, detail="2단계 인증 코드가 올바르지 않습니다.")
+
     security.clear_login_failures(ip_hash, req.username)
-    achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
-    # 지정된 관리자 이름이면 로그인 시에도 관리자 보장
     if user.username.lower() == settings.ADMIN_USERNAME.lower() and not user.is_admin:
         user.is_admin = 1
+    user.last_login_at = datetime.utcnow()
     streak.update_streak(user)
     db.commit()
+    achievements.evaluate(db, user, _ach_ctx(db, user))
+    _log_security("login_ok", request=request, user_id=user.id, username=user.username)
     token = auth.issue_token(user)
     return {"token": token, "user": user.public_dict()}
 
@@ -369,7 +415,7 @@ def puzzle_solved(req: PuzzleSolvedRequest, user: User = Depends(current_user),
                          rating_change=after - before))
     streak_info = streak.update_streak(user) if req.success else None
     db.commit()
-    new_ach = achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
     return {
         "ok": True,
         "rated": True,
@@ -419,7 +465,7 @@ def friend_respond(req: FriendRespondBody, user: User = Depends(current_user),
     if err:
         raise HTTPException(status_code=400, detail=err)
     if req.accept:
-        achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
+        achievements.evaluate(db, user, _ach_ctx(db, user))
     return {"ok": True}
 
 
@@ -490,7 +536,7 @@ def puzzle_daily_solved(req: DailySolveBody, user: User = Depends(current_user),
     if first and req.success:
         streak.update_streak(user)
         db.commit()
-    new_ach = achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
     return {"ok": True, "firstAttempt": first, "newAchievements": new_ach,
             **training.daily_status(db, user)}
 
@@ -515,7 +561,7 @@ def rush_result(req: RushResultBody, user: User = Depends(current_user),
     res = training.record_rush(db, user, req.mode, req.score, req.misses)
     streak.update_streak(user)
     db.commit()
-    new_ach = achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
     return {"ok": True, **res, "newAchievements": new_ach}
 
 
@@ -530,6 +576,277 @@ def rush_history(user: User = Depends(current_user), db: Session = Depends(get_d
         RushSession.user_id == user.id
     ).order_by(RushSession.id.desc()).limit(20).all()
     return {"sessions": [r.to_dict() for r in rows]}
+
+
+# ==========================================================================
+#  통찰 (Insights)
+# ==========================================================================
+@app.get("/api/insights")
+def insights_get(days: int = Query(default=0, ge=0, le=3650),
+                 user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """내 체스 데이터 분석 — 레이팅/색깔/오프닝/정확도/활동 패턴 등."""
+    return insights.build(db, user, days)
+
+
+@app.get("/api/insights/{username}")
+def insights_of(username: str, db: Session = Depends(get_db)):
+    """다른 사용자의 공개 통찰(요약)."""
+    u = db.query(User).filter(User.username.ilike(username)).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    data = insights.build(db, u, 0)
+    # 공개 범위: 훈련 상세는 빼고 요약만
+    return {
+        "username": u.username,
+        "games": data["games"],
+        "rating": data["rating"],
+        "overall": data["overall"],
+        "byColor": data["byColor"],
+        "openings": data["openings"][:8],
+        "streaks": data["streaks"],
+    }
+
+
+@app.post("/api/insights/review")
+def insights_save_review(body: ReviewSave, user: User = Depends(current_user),
+                         db: Session = Depends(get_db)):
+    """게임 리뷰 결과 저장 → 정확도 추이·수 분류 통계에 반영."""
+    r = insights.save_review(db, user, body.model_dump(by_alias=True))
+    return {"ok": True, "review": r.to_dict()}
+
+
+# ==========================================================================
+#  체스 클럽
+# ==========================================================================
+
+def _optional_user(authorization: str, db: Session):
+    """로그인했으면 사용자, 아니면 None (공개 조회용)."""
+    if not authorization.lower().startswith("bearer "):
+        return None
+    uid = auth.get_user_id_by_token(authorization[7:].strip())
+    if not uid:
+        return None
+    return db.query(User).filter(User.id == uid).first()
+
+
+def _club_or_404(db: Session, slug: str) -> Club:
+    club = clubs.get_by_slug(db, slug)
+    if not club:
+        raise HTTPException(status_code=404, detail="클럽을 찾을 수 없습니다.")
+    return club
+
+
+def _require_member(db: Session, club: Club, user: User) -> str:
+    role = clubs.role_of(db, club.id, user.id)
+    if not role:
+        raise HTTPException(status_code=403, detail="클럽 구성원만 이용할 수 있습니다.")
+    return role
+
+
+@app.get("/api/clubs")
+def clubs_list(q: str = Query(default=""), mine: bool = Query(default=False),
+               authorization: str = Header(default=""), db: Session = Depends(get_db)):
+    user = _optional_user(authorization, db)
+    return {
+        "clubs": clubs.list_clubs(db, q, user.id if user else None, mine),
+        "stats": clubs.stats(db, user) if user else None,
+    }
+
+
+@app.post("/api/clubs")
+def clubs_create(body: ClubCreate, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    club, err = clubs.create(db, user, body.name, body.description,
+                             body.emoji, body.isPublic)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    achievements.evaluate(db, user, _ach_ctx(db, user))
+    return {"ok": True, "club": club.to_dict(1)}
+
+
+@app.get("/api/clubs/{slug}")
+def clubs_detail(slug: str, authorization: str = Header(default=""),
+                 db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    user = _optional_user(authorization, db)
+    d = clubs.detail(db, club, user.id if user else None)
+    d["posts"] = clubs.posts(db, club)
+    return d
+
+
+@app.delete("/api/clubs/{slug}")
+def clubs_delete(slug: str, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = clubs.role_of(db, club.id, user.id)
+    if role != "owner" and not user.is_admin:
+        raise HTTPException(status_code=403, detail="개설자만 삭제할 수 있습니다.")
+    clubs.delete_club(db, club)
+    return {"ok": True}
+
+
+@app.post("/api/clubs/{slug}/join")
+def clubs_join(slug: str, user: User = Depends(current_user),
+               db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    ok, err = clubs.join(db, club, user)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    achievements.evaluate(db, user, _ach_ctx(db, user))
+    return {"ok": True}
+
+
+@app.post("/api/clubs/{slug}/leave")
+def clubs_leave(slug: str, user: User = Depends(current_user),
+                db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    ok, err = clubs.leave(db, club, user)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True}
+
+
+@app.post("/api/clubs/{slug}/role")
+def clubs_role(slug: str, body: ClubRoleBody, user: User = Depends(current_user),
+               db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    ok, err = clubs.set_role(db, club, role, body.userId, body.role)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True}
+
+
+@app.post("/api/clubs/{slug}/kick")
+def clubs_kick(slug: str, body: ClubKickBody, user: User = Depends(current_user),
+               db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    ok, err = clubs.kick(db, club, role, body.userId)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True}
+
+
+# ---------- 공지물 / 클럽 보드 ----------
+@app.post("/api/clubs/{slug}/posts")
+def clubs_post_create(slug: str, body: ClubPostBody, user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    post, err = clubs.create_post(db, club, user, body.title, body.body,
+                                  body.fen, body.pgn, body.pinned, role)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True, "post": post.to_dict()}
+
+
+@app.delete("/api/clubs/{slug}/posts/{post_id}")
+def clubs_post_delete(slug: str, post_id: int, user: User = Depends(current_user),
+                      db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    ok, err = clubs.delete_post(db, club, post_id, user, role)
+    if err:
+        raise HTTPException(status_code=403, detail=err)
+    return {"ok": True}
+
+
+@app.post("/api/clubs/{slug}/posts/{post_id}/pin")
+def clubs_post_pin(slug: str, post_id: int, body: ClubPinBody,
+                   user: User = Depends(current_user), db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    ok, err = clubs.pin_post(db, club, post_id, body.pinned, role)
+    if err:
+        raise HTTPException(status_code=403, detail=err)
+    return {"ok": True}
+
+
+# ---------- 클럽 채팅 ----------
+@app.get("/api/clubs/{slug}/messages")
+def clubs_messages(slug: str, after: int = Query(default=0),
+                   user: User = Depends(current_user), db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    _require_member(db, club, user)
+    return {"messages": clubs.messages(db, club, after)}
+
+
+@app.post("/api/clubs/{slug}/messages")
+def clubs_message_send(slug: str, body: ClubMessageBody, user: User = Depends(current_user),
+                       db: Session = Depends(get_db)):
+    if not sitesettings.get("chat_enabled", True):
+        raise HTTPException(status_code=403, detail="현재 채팅이 비활성화되어 있습니다.")
+    club = _club_or_404(db, slug)
+    _require_member(db, club, user)
+    m, err = clubs.send_message(db, club, user, body.text)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"ok": True, "message": m.to_dict()}
+
+
+@app.delete("/api/clubs/{slug}/messages/{msg_id}")
+def clubs_message_delete(slug: str, msg_id: int, user: User = Depends(current_user),
+                         db: Session = Depends(get_db)):
+    club = _club_or_404(db, slug)
+    role = _require_member(db, club, user)
+    ok, err = clubs.delete_message(db, club, msg_id, user, role)
+    if err:
+        raise HTTPException(status_code=403, detail=err)
+    return {"ok": True}
+
+
+# ---------- 시각(Vision) 훈련 ----------
+@app.get("/api/vision/modes")
+def vision_modes():
+    return {"modes": [{"id": k, **v} for k, v in vision.MODES.items()]}
+
+
+@app.get("/api/vision/questions")
+def vision_questions(mode: str = Query(default="coords"),
+                     count: int = Query(default=80, ge=10, le=200)):
+    return {"mode": mode, "questions": vision.questions(mode, count),
+            "seconds": vision.MODES.get(mode, vision.MODES["coords"])["seconds"]}
+
+
+@app.post("/api/vision/result")
+def vision_result(body: VisionResultBody, user: User = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    res = vision.record(db, user, body.mode, body.score, body.misses)
+    streak.update_streak(user)
+    db.commit()
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
+    return {"ok": True, **res, "newAchievements": new_ach}
+
+
+@app.get("/api/vision/leaderboard")
+def vision_leaderboard(mode: str = Query(default="coords"), db: Session = Depends(get_db)):
+    return {"mode": mode, "leaderboard": vision.leaderboard(db, mode)}
+
+
+@app.get("/api/vision/history")
+def vision_history(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return {"sessions": vision.history(db, user)}
+
+
+# ---------- 퍼즐 전투 ----------
+@app.get("/api/battle/leaderboard")
+def battle_leaderboard(db: Session = Depends(get_db)):
+    rows = db.query(User).filter(User.battle_wins > 0, User.banned == 0).order_by(
+        User.battle_wins.desc()).limit(20).all()
+    return {"leaderboard": [{
+        "username": u.username, "wins": u.battle_wins, "losses": u.battle_losses,
+        "rating": round(u.rating),
+    } for u in rows]}
+
+
+@app.get("/api/battle/history")
+def battle_history(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    rows = db.query(BattleSession).filter(
+        BattleSession.user_id == user.id
+    ).order_by(BattleSession.id.desc()).limit(20).all()
+    return {"sessions": [r.to_dict() for r in rows],
+            "wins": user.battle_wins, "losses": user.battle_losses}
 
 
 @app.get("/api/puzzles/leaderboard")
@@ -557,24 +874,76 @@ def openings_search(q: str = Query(default="")):
     return {"results": openings.search(q)}
 
 
+# ---------- 오프닝 탐색기 (게임 수 · 승률 · 레이팅 범위) ----------
+@app.get("/api/explorer")
+def explorer_stats(moves: str = Query(default=""),
+                   ratings: str = Query(default=""),
+                   speeds: str = Query(default=""),
+                   source: str = Query(default="lichess"),
+                   db: Session = Depends(get_db)):
+    """수순별 게임 수와 승률.
+
+    moves   : 쉼표 구분 SAN (예: e4,e5,Nf3)
+    ratings : 쉼표 구분 레이팅 구간 (예: 1600,1800,2000)
+    speeds  : 쉼표 구분 시간제어 (예: blitz,rapid)
+    source  : lichess(수백만 판) 또는 local(우리 사이트 게임)
+    """
+    seq = [m.strip() for m in moves.split(",") if m.strip()][:60]
+    r_list = []
+    for r in ratings.split(","):
+        r = r.strip()
+        if r.isdigit():
+            r_list.append(int(r))
+    s_list = [s.strip() for s in speeds.split(",") if s.strip()]
+
+    data = explorer.explore(db, seq, r_list or None, s_list or None,
+                            "local" if source == "local" else "lichess")
+    data["opening"] = openings.lookup(seq)
+    data["ratingBands"] = explorer.RATING_BANDS
+    data["speedOptions"] = explorer.SPEEDS
+    return data
+
+
+# ---------- 오프닝 배우기 ----------
+@app.get("/api/learn/curriculum")
+def learn_curriculum(authorization: str = Header(default=""),
+                     db: Session = Depends(get_db)):
+    """커리큘럼 + (로그인 시) 진도. 비로그인도 볼 수 있다."""
+    user = None
+    if authorization.lower().startswith("bearer "):
+        uid = auth.get_user_id_by_token(authorization[7:].strip())
+        if uid:
+            user = db.query(User).filter(User.id == uid).first()
+    return {
+        "units": learn.curriculum(db, user),
+        "stats": learn.stats(db, user) if user else None,
+    }
+
+
+@app.post("/api/learn/result")
+def learn_result(body: LearnResultBody, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    res = learn.record(db, user, body.openingKey, body.score)
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
+    return {"ok": True, "progress": res, "newAchievements": new_ach,
+            "stats": learn.stats(db, user)}
+
+
 @app.post("/api/openings/book")
-def openings_book(body: dict):
+def openings_book(body: OpeningsBookBody):
     """게임 리뷰용 — 각 수가 '이론(정석)'인지 판정.
 
     body: {"moves": ["e4","e5","Nf3", ...]}  (SAN)
     반환: {"book": [true, true, false, ...]}  수마다 이론 여부
     """
-    moves = body.get("moves") or []
-    if not isinstance(moves, list) or len(moves) > 300:
-        raise HTTPException(status_code=400, detail="잘못된 수순입니다.")
-    moves = [str(m)[:8] for m in moves]
+    moves = [str(m)[:8] for m in body.moves]
     return {"book": openings.book_flags(moves), "positions": openings.position_count()}
 
 
 # ---------- 업적 ----------
 @app.get("/api/achievements")
 def achievements_list(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    new_ach = achievements.evaluate(db, user, {"friends": len(friends.list_friends(db, user.id))})
+    new_ach = achievements.evaluate(db, user, _ach_ctx(db, user))
     return {"achievements": achievements.list_for_user(db, user), "new": new_ach}
 
 
@@ -688,6 +1057,187 @@ def game_detail(game_id: int, user: User = Depends(current_user), db: Session = 
     d = g.summary_dict()
     d["pgn"] = g.pgn
     return d
+
+
+# ==========================================================================
+#  계정 보안 (2FA · 비밀번호 · 세션 · 데이터 · 탈퇴)
+# ==========================================================================
+@app.get("/api/account/security")
+def account_security(user: User = Depends(current_user)):
+    return {
+        "twoFactor": bool(user.totp_enabled),
+        "backupCodesLeft": len([c for c in (user.backup_codes or "").split(",") if c]),
+        "lastLoginAt": user.last_login_at.isoformat() if user.last_login_at else "",
+        "passwordChangedAt": user.password_changed_at.isoformat() if user.password_changed_at else "",
+        "termsAcceptedAt": user.terms_accepted_at.isoformat() if user.terms_accepted_at else "",
+    }
+
+
+@app.post("/api/account/password")
+def account_password(req: PasswordChange, request: Request,
+                     user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _u, err = auth.login(db, user.username, req.current_password)
+    if err:
+        _log_security("password_change_failed", request=request, user_id=user.id,
+                      username=user.username)
+        raise HTTPException(status_code=401, detail="현재 비밀번호가 올바르지 않습니다.")
+    if security.is_weak_password(req.new_password):
+        raise HTTPException(status_code=400, detail="너무 흔한 비밀번호입니다.")
+
+    err = auth.change_password(db, user, req.new_password)   # 토큰 전부 무효화
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    user.password_changed_at = datetime.utcnow()
+    db.commit()
+    _log_security("password_changed", request=request, user_id=user.id, username=user.username)
+
+    # 새 토큰 발급 (현재 기기만 유지, 다른 기기는 로그아웃됨)
+    return {"ok": True, "token": auth.issue_token(user),
+            "message": "비밀번호가 변경되었습니다. 다른 기기의 세션은 모두 로그아웃되었습니다."}
+
+
+@app.post("/api/account/logout-all")
+def account_logout_all(request: Request, user: User = Depends(current_user),
+                       db: Session = Depends(get_db)):
+    auth.revoke_all_tokens(db, user)
+    _log_security("logout_all", request=request, user_id=user.id, username=user.username)
+    return {"ok": True, "token": auth.issue_token(user)}
+
+
+# ---------- 2단계 인증 ----------
+@app.post("/api/account/2fa/setup")
+def account_2fa_setup(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """시크릿 발급 (아직 활성화되지 않음). 인증 앱에 등록 후 코드로 확인해야 켜진다."""
+    if user.totp_enabled:
+        raise HTTPException(status_code=400, detail="이미 2단계 인증이 켜져 있습니다.")
+    secret = auth.generate_totp_secret()
+    user.totp_secret = secret
+    db.commit()
+    return {"secret": secret, "uri": auth.totp_uri(user.username, secret)}
+
+
+@app.post("/api/account/2fa/enable")
+def account_2fa_enable(req: TotpVerify, request: Request,
+                       user: User = Depends(current_user), db: Session = Depends(get_db)):
+    if not user.totp_secret:
+        raise HTTPException(status_code=400, detail="먼저 설정을 시작해주세요.")
+    if not auth.verify_totp(user.totp_secret, req.code):
+        raise HTTPException(status_code=400, detail="코드가 올바르지 않습니다.")
+
+    codes = auth.generate_backup_codes(10)
+    user.backup_codes = auth.hash_backup_codes(codes)
+    user.totp_enabled = 1
+    db.commit()
+    _log_security("2fa_enabled", request=request, user_id=user.id, username=user.username)
+    achievements.evaluate(db, user, _ach_ctx(db, user))
+    # 백업 코드는 이때 딱 한 번만 보여준다
+    return {"ok": True, "backupCodes": codes}
+
+
+@app.post("/api/account/2fa/disable")
+def account_2fa_disable(req: TotpDisable, request: Request,
+                        user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _u, err = auth.login(db, user.username, req.password)
+    if err:
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
+    user.totp_enabled = 0
+    user.totp_secret = ""
+    user.backup_codes = ""
+    db.commit()
+    _log_security("2fa_disabled", request=request, user_id=user.id, username=user.username)
+    return {"ok": True}
+
+
+# ---------- 내 데이터 내보내기 (개인정보 이동권) ----------
+@app.get("/api/account/export")
+def account_export(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """내가 가진 모든 개인 데이터를 JSON 으로 내려받는다."""
+    games = db.query(Game).filter(
+        (Game.white_id == user.id) | (Game.black_id == user.id)
+    ).order_by(Game.id.asc()).limit(1000).all()
+    msgs = db.query(DirectMessage).filter(
+        (DirectMessage.sender_id == user.id) | (DirectMessage.recipient_id == user.id)
+    ).limit(2000).all()
+    club_rows = db.query(ClubMember).filter(ClubMember.user_id == user.id).all()
+
+    payload = {
+        "exportedAt": datetime.utcnow().isoformat(),
+        "profile": user.public_dict(),
+        "security": {
+            "twoFactor": bool(user.totp_enabled),
+            "lastLoginAt": user.last_login_at.isoformat() if user.last_login_at else "",
+            "termsAcceptedAt": user.terms_accepted_at.isoformat() if user.terms_accepted_at else "",
+        },
+        "games": [{**g.summary_dict(), "pgn": g.pgn} for g in games],
+        "directMessages": [m.to_dict() for m in msgs],
+        "clubs": [{"clubId": c.club_id, "role": c.role} for c in club_rows],
+        "achievements": achievements.list_for_user(db, user),
+        "note": "비밀번호와 2FA 시크릿은 보안상 내보내지 않습니다.",
+    }
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{user.username}_data.json"'},
+    )
+
+
+# ---------- 회원 탈퇴 ----------
+@app.post("/api/account/delete")
+def account_delete(req: AccountDelete, request: Request,
+                   user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """계정 삭제.
+
+    개인정보(계정·프로필·메시지·알림·클럽 활동)는 완전히 지운다.
+    다만 **상대방의 대국 기록**은 남긴다(상대의 정당한 기록이므로).
+    이때 내 이름은 '탈퇴한 사용자'로 익명화한다.
+    """
+    if req.confirm.strip() != "삭제":
+        raise HTTPException(status_code=400, detail="확인란에 '삭제'라고 입력해주세요.")
+    _u, err = auth.login(db, user.username, req.password)
+    if err:
+        raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
+    if user.is_admin and db.query(User).filter(User.is_admin == 1).count() <= 1:
+        raise HTTPException(status_code=400, detail="마지막 관리자는 탈퇴할 수 없습니다.")
+
+    uid = user.id
+    uname = user.username
+
+    # 개설한 클럽은 삭제 (구성원 데이터 정리 포함)
+    for cl in db.query(Club).filter(Club.owner_id == uid).all():
+        clubs.delete_club(db, cl)
+
+    # 개인 데이터 삭제
+    db.query(ClubMember).filter(ClubMember.user_id == uid).delete()
+    db.query(ClubMessage).filter(ClubMessage.user_id == uid).delete()
+    db.query(ClubPost).filter(ClubPost.user_id == uid).delete()
+    db.query(DirectMessage).filter(
+        (DirectMessage.sender_id == uid) | (DirectMessage.recipient_id == uid)
+    ).delete()
+    db.query(Friendship).filter(
+        (Friendship.requester_id == uid) | (Friendship.addressee_id == uid)
+    ).delete()
+    db.query(Notification).filter(Notification.user_id == uid).delete()
+    db.query(PuzzleAttempt).filter(PuzzleAttempt.user_id == uid).delete()
+    db.query(RushSession).filter(RushSession.user_id == uid).delete()
+    db.query(BattleSession).filter(BattleSession.user_id == uid).delete()
+    db.query(VisionScore).filter(VisionScore.user_id == uid).delete()
+    db.query(GameReview).filter(GameReview.user_id == uid).delete()
+    db.query(OpeningProgress).filter(OpeningProgress.user_id == uid).delete()
+
+    # 대국 기록은 상대를 위해 남기되 익명화
+    for g in db.query(Game).filter((Game.white_id == uid) | (Game.black_id == uid)).all():
+        if g.white_id == uid:
+            g.white_id = None
+            g.white_name = "탈퇴한 사용자"
+        if g.black_id == uid:
+            g.black_id = None
+            g.black_name = "탈퇴한 사용자"
+
+    db.delete(user)
+    db.commit()
+    _log_security("account_deleted", request=request, username=uname,
+                  detail="사용자 요청에 의한 탈퇴")
+    return {"ok": True, "message": "계정이 삭제되었습니다. 그동안 이용해주셔서 감사합니다."}
 
 
 # ---------- 프로필 ----------
@@ -915,6 +1465,21 @@ def _audit(db: Session, admin: User, action: str, *, target_type: str = "",
         db.commit()
     except Exception:
         db.rollback()
+
+
+def _ach_ctx(db: Session, user: User) -> dict:
+    """업적 판정에 쓰이는 부가 정보."""
+    from .models import OpeningProgress
+    mastered = db.query(OpeningProgress).filter(
+        OpeningProgress.user_id == user.id, OpeningProgress.mastered == 1
+    ).count()
+    club_stats = clubs.stats(db, user)
+    return {
+        "friends": len(friends.list_friends(db, user.id)),
+        "openingsMastered": mastered,
+        "clubsJoined": club_stats["joined"],
+        "clubsOwned": club_stats["owned"],
+    }
 
 
 def _get_target(db: Session, user_id: int) -> User:
@@ -1190,13 +1755,32 @@ def public_site():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(default="")):
     from .database import SessionLocal
-    user_id = auth.get_user_id_by_token(token)
-    if not user_id:
-        await websocket.close(code=4401)
+
+    # ---- 교차 사이트 WebSocket 하이재킹(CSWSH) 방어 ----
+    # 브라우저는 WS 에 동일 출처 정책을 강제하지 않는다. Origin 을 반드시 검사해야
+    # 악성 사이트가 사용자의 세션으로 WS 를 여는 것을 막을 수 있다.
+    origin = websocket.headers.get("origin", "")
+    host = websocket.headers.get("host", "")
+    if not security.origin_allowed(origin, host, settings.ALLOWED_ORIGINS):
+        await websocket.close(code=4403)   # Forbidden origin
         return
+
+    # 연결 폭주 방지 (IP 당 레이트 리밋)
+    client_ip = websocket.client.host if websocket.client else ""
+    fwd = websocket.headers.get("x-forwarded-for", "")
+    if fwd:
+        client_ip = fwd.split(",")[0].strip()
+    allowed, _retry = security.rate_check(security.hash_ip(client_ip), "write")
+    if not allowed:
+        await websocket.close(code=4429)
+        return
+
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        # token_version 까지 검증 (폐기된 토큰 차단)
+        user = auth.user_from_token(db, token)
+        if user and user.banned:
+            user = None
     finally:
         db.close()
     if not user:

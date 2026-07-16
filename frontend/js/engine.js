@@ -11,6 +11,19 @@ const Engine = (() => {
   let lastEval = { score: null, mate: null, best: null, depth: 0 };
   let mode = "내장 JS 엔진";
 
+  /* ---------- Tempo 보정 ----------
+     Stockfish 고전 평가는 '차례인 쪽'에게 tempo 보너스(약 28cp)를 더한다.
+     그대로 표시하면 백 차례엔 백이, 흑 차례엔 흑이 유리한 것처럼 보이는
+     톱니파가 생기고(측정: ±0.5폰), 게임 리뷰에서도 모든 수가 손해처럼 계산된다.
+     실측 검증: 보정 시 차례 편향 0.53~0.71폰 → 0.03~0.15폰 으로 사라짐. */
+  const TEMPO_CP = 28;
+
+  function removeTempo(whiteCp, fen) {
+    if (whiteCp == null) return whiteCp;
+    const whiteToMove = fen.split(" ")[1] !== "b";
+    return whiteCp - TEMPO_CP * (whiteToMove ? 1 : -1);
+  }
+
   function setting(key, dflt) {
     try { if (window.KiwiSettings) return window.KiwiSettings.get(key, dflt); } catch (e) {}
     return dflt;
@@ -249,31 +262,60 @@ const Engine = (() => {
     return { score: Math.round(ranked[0].score), mate: null, best: ranked[0].uci, moverPOV: true };
   }
 
+  // 국면별 평가 캐시 (탐색 반복 방지 → 기보 넘길 때 즉시 표시)
+  const evalCache = new Map();
+  const EVAL_CACHE_MAX = 400;
+
+  function cacheGet(fen, depth) {
+    const hit = evalCache.get(fen);
+    return (hit && hit.depth >= depth) ? hit : null;
+  }
+  function cachePut(fen, val) {
+    if (evalCache.size >= EVAL_CACHE_MAX) {
+      const firstKey = evalCache.keys().next().value;
+      evalCache.delete(firstKey);
+    }
+    evalCache.set(fen, val);
+  }
+
   async function evaluate(fen) {
-    const movetime = setting("evalMovetime", 400);
+    const depth = setting("evalDepth", 14);
     const turn = fen.split(" ")[1] === "b" ? -1 : 1;
+
+    const cached = cacheGet(fen, depth);
+    if (cached) return { ...cached };
+
     if (ready) {
       lastEval = { score: null, mate: null, best: null, depth: 0 };
+      const capMs = 6000;   // 안전장치(무한 대기 방지)
       const r = await new Promise((resolve) => {
         pendingEval = resolve;
         worker.postMessage("setoption name UCI_LimitStrength value false");
         worker.postMessage("setoption name Skill Level value 20");
         worker.postMessage("position fen " + fen);
-        worker.postMessage(`go depth 18 movetime ${movetime}`);
-        setTimeout(() => { if (pendingEval) { const x = pendingEval; pendingEval = null; x({ ...lastEval }); } }, movetime + 3000);
+        // 고정 깊이로 탐색해야 국면 간 평가가 일관된다(movetime 은 깊이가 들쭉날쭉).
+        worker.postMessage(`go depth ${depth}`);
+        setTimeout(() => { if (pendingEval) { const x = pendingEval; pendingEval = null; x({ ...lastEval }); } }, capMs);
       });
       if (r) {
         const out = { best: r.best, score: null, mate: null, depth: r.depth || 0, engine: "stockfish" };
-        if (r.mate != null) out.mate = turn === 1 ? r.mate : -r.mate;
-        else if (r.score != null) out.score = turn === 1 ? r.score : -r.score;
-        return out;
+        if (r.mate != null) {
+          out.mate = turn === 1 ? r.mate : -r.mate;
+        } else if (r.score != null) {
+          const white = turn === 1 ? r.score : -r.score;
+          out.score = removeTempo(white, fen);   // tempo 제거 → 차례 편향 없음
+        }
+        cachePut(fen, out);
+        return { ...out };
       }
     }
+
     const r = jsEval(fen, 1);   // 총 2플라이(짝수) + 정지탐색 → 빠르고 편향 없음
     if (r.mate == null && r.score != null && r.moverPOV) r.score = turn === 1 ? r.score : -r.score;
     r.depth = 2;
     r.engine = "js";
-    return r;
+    cachePut(fen, r);
+    return { ...r };
   }
 
   /* ---------- 병렬 리뷰 평가 (워커 풀) ---------- */
@@ -293,10 +335,10 @@ const Engine = (() => {
     });
   }
 
-  function evalOnWorker(w, fen, movetime) {
+  function evalOnWorker(w, fen, depth) {
     return new Promise((resolve) => {
       const ev = { score: null, mate: null, best: null, depth: 0 };
-      const to = setTimeout(() => { w.onmessage = null; resolve(ev); }, movetime + 3000);
+      const to = setTimeout(() => { w.onmessage = null; resolve(ev); }, 8000);
       w.onmessage = (e) => {
         const line = typeof e.data === "string" ? e.data : (e.data && e.data.data) || "";
         if (line.startsWith("info") && line.indexOf("score") !== -1) {
@@ -320,20 +362,147 @@ const Engine = (() => {
       };
       w.postMessage("setoption name Skill Level value 20");
       w.postMessage("position fen " + fen);
-      w.postMessage("go movetime " + movetime);
+      w.postMessage("go depth " + depth);
+    });
+  }
+
+  /**
+   * 리뷰용 정밀 분석 — MultiPV 2 로 1·2순위 수와 평가를 함께 얻는다.
+   * '훌륭한 수(유일한 수)'와 '전술 판별'에 2순위 정보가 반드시 필요하다.
+   * 반환: [{ cp, best, second, bestCpStm, secondCpStm, mate, depth }]
+   *   - cp        : 백 관점 평가(tempo 보정 완료)
+   *   - bestCpStm : 차례인 쪽 관점 1순위 평가 (승률 계산용)
+   */
+  async function reviewEvaluateMulti(fens, onProgress) {
+    const depth = setting("reviewDepth", 14);
+    const results = new Array(fens.length).fill(null);
+    let done = 0;
+
+    // Stockfish 워커 풀을 띄워 병렬 분석
+    if (ready) {
+      let poolSize = setting("reviewWorkers", 0);
+      if (!poolSize) {
+        poolSize = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+      }
+      const spawns = [];
+      for (let i = 0; i < poolSize; i++) spawns.push(spawnEvalWorker());
+      const pool = (await Promise.all(spawns)).filter(Boolean);
+
+      if (pool.length) {
+        let next = 0;
+        const runner = async (w) => {
+          for (;;) {
+            const i = next++;
+            if (i >= fens.length) break;
+            results[i] = await multiOnWorker(w, fens[i], depth);
+            done++;
+            if (onProgress) onProgress(done, fens.length);
+          }
+        };
+        await Promise.all(pool.map(runner));
+        pool.forEach((w) => { try { w.terminate(); } catch (e) {} });
+        return results;
+      }
+    }
+
+    // 폴백: 내장 엔진 (MultiPV 없음 → 2순위 정보 없이 동작)
+    for (let i = 0; i < fens.length; i++) {
+      const turn = fens[i].split(" ")[1] === "b" ? -1 : 1;
+      const r = jsEval(fens[i], 1);
+      const whiteCp = (r.mate == null && r.score != null && r.moverPOV)
+        ? (turn === 1 ? r.score : -r.score) : (r.score || 0);
+      results[i] = {
+        cp: whiteCp,
+        bestCpStm: turn === 1 ? whiteCp : -whiteCp,
+        secondCpStm: null,
+        best: r.best || null,
+        second: null,
+        mate: r.mate != null ? r.mate : null,
+        depth: 2,
+      };
+      done++;
+      if (onProgress) onProgress(done, fens.length);
+    }
+    return results;
+  }
+
+  function multiOnWorker(w, fen, depth) {
+    return new Promise((resolve) => {
+      const wtm = fen.split(" ")[1] !== "b";
+      const pvs = {};
+      const to = setTimeout(() => { w.onmessage = null; resolve(pack()); }, 15000);
+
+      function pack() {
+        const p1 = pvs[1] || {};
+        const p2 = pvs[2] || null;
+        // 차례인 쪽 관점 → 백 관점
+        const cpStm = p1.cpStm != null ? p1.cpStm : 0;
+        const whiteCp = wtm ? cpStm : -cpStm;
+        return {
+          cp: whiteCp,
+          bestCpStm: p1.cpStm != null ? p1.cpStm : null,
+          secondCpStm: p2 && p2.cpStm != null ? p2.cpStm : null,
+          best: p1.move || null,
+          second: p2 ? p2.move : null,
+          mate: p1.mate != null ? (wtm ? p1.mate : -p1.mate) : null,
+          mateStm: p1.mate != null ? p1.mate : null,
+          depth: p1.depth || 0,
+        };
+      }
+
+      w.onmessage = (e) => {
+        const line = typeof e.data === "string" ? e.data : "";
+        if (line.startsWith("bestmove")) {
+          clearTimeout(to);
+          w.onmessage = null;
+          resolve(pack());
+          return;
+        }
+        if (!line.startsWith("info") || line.indexOf("score") === -1) return;
+        if (line.indexOf("lowerbound") !== -1 || line.indexOf("upperbound") !== -1) return;
+
+        const dM = line.match(/ depth (\d+)/);
+        const d = dM ? parseInt(dM[1], 10) : 0;
+        const pvM = line.match(/ multipv (\d+)/);
+        const pv = pvM ? parseInt(pvM[1], 10) : 1;
+        const mvM = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (!d || !mvM) return;
+        if (pvs[pv] && pvs[pv].depth > d) return;
+
+        const cpM = line.match(/score cp (-?\d+)/);
+        const mtM = line.match(/score mate (-?\d+)/);
+        let cpStm = null, mate = null;
+        if (cpM) {
+          cpStm = parseInt(cpM[1], 10) - TEMPO_CP;   // tempo 제거 (차례 쪽 관점)
+        } else if (mtM) {
+          mate = parseInt(mtM[1], 10);
+          cpStm = mate > 0 ? 100000 - mate * 100 : -100000 - mate * 100;
+        }
+        pvs[pv] = { depth: d, cpStm, move: mvM[1], mate };
+      };
+
+      w.postMessage("setoption name MultiPV value 2");
+      w.postMessage("setoption name UCI_LimitStrength value false");
+      w.postMessage("setoption name Skill Level value 20");
+      w.postMessage("position fen " + fen);
+      w.postMessage("go depth " + depth);
     });
   }
 
   async function reviewEvaluate(fens, onProgress) {
-    const movetime = setting("reviewMovetime", 200);
+    const depth = setting("reviewDepth", 12);
     const results = new Array(fens.length).fill(null);
     let done = 0;
 
     function toWhitePOV(fen, ev) {
       const turn = fen.split(" ")[1] === "b" ? -1 : 1;
       const out = { best: ev.best, score: null, mate: null, depth: ev.depth || 0 };
-      if (ev.mate != null) out.mate = turn === 1 ? ev.mate : -ev.mate;
-      else if (ev.score != null) out.score = turn === 1 ? ev.score : -ev.score;
+      if (ev.mate != null) {
+        out.mate = turn === 1 ? ev.mate : -ev.mate;
+      } else if (ev.score != null) {
+        const white = turn === 1 ? ev.score : -ev.score;
+        out.score = removeTempo(white, fen);   // tempo 제거(리뷰 분류 정확도 핵심)
+      }
       return out;
     }
 
@@ -348,7 +517,7 @@ const Engine = (() => {
         async function runner(w) {
           while (next < fens.length) {
             const i = next++;
-            const ev = await evalOnWorker(w, fens[i], movetime);
+            const ev = await evalOnWorker(w, fens[i], depth);
             results[i] = toWhitePOV(fens[i], ev);
             done++;
             if (onProgress) onProgress(done, fens.length);

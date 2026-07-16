@@ -176,6 +176,12 @@
         if (window.kiwiRushMiss) window.kiwiRushMiss();
         return "snapback";
       }
+      // 전투: 실수 카운트 + 상대에게 전송
+      if (mode === "battle") {
+        setStatus("❌ 실수! 다음 문제로 넘어갑니다.", "var(--danger)");
+        battleMiss();
+        return "snapback";
+      }
       // 일일: 한 번 틀리면 실패로 확정(하루 한 번)
       if (mode === "daily" && dailyActive) {
         dailyActive = false;
@@ -235,8 +241,13 @@
     // 러시: 점수 +1 후 다음 문제
     if (mode === "rush") {
       setStatus("✅ 정답! 다음 문제…", "var(--accent-strong)");
-      if (window.kiwiRushMiss) { /* 러시 모드에서는 rushCorrect 가 처리 */ }
       rushCorrect();
+      return;
+    }
+    // 전투: 점수 +1 후 다음 문제 (상대에게 실시간 전송)
+    if (mode === "battle") {
+      setStatus("✅ 정답! 다음 문제…", "var(--accent-strong)");
+      battleCorrect();
       return;
     }
     // 일일: 하루 한 번 기록
@@ -334,12 +345,14 @@
     });
     $("dailyCard").classList.toggle("hidden", next !== "daily");
     $("rushCard").classList.toggle("hidden", next !== "rush");
+    $("battleCard").classList.toggle("hidden", next !== "battle");
     $("trainView").classList.toggle("hidden", next === "daily" && !dailyActive);
     stopRush(false);
     if (dailyTimer) { clearInterval(dailyTimer); dailyTimer = null; }
     updateModeBadge();
     if (next === "daily") { dailyActive = false; loadDailyStatus(); $("trainView").classList.add("hidden"); }
     else if (next === "rush") { loadRushBoard(); $("trainView").classList.add("hidden"); }
+    else if (next === "battle") { loadBattleBoard(); $("trainView").classList.add("hidden"); }
     else { $("trainView").classList.remove("hidden"); loadPuzzle(); }
   }
 
@@ -561,6 +574,166 @@
     if (mode === "daily") { badge.textContent = "📅 일일 (레이팅 반영)"; badge.className = "rated-badge"; return; }
     if (isRated()) { badge.textContent = "레이팅 반영"; badge.className = "rated-badge"; }
     else { badge.textContent = "연습 (레이팅 미반영)"; badge.className = "rated-badge unrated"; }
+  }
+
+
+
+  /* ==================== ⚔️ 퍼즐 전투 ==================== */
+  let bSet = [];
+  let bIndex = 0;
+  let bScore = 0;
+  let bMisses = 0;
+  let bRunning = false;
+  let bLeft = 180;
+  let bTimer = null;
+  let bMaxMisses = 3;
+
+  function bFmt(sec) {
+    if (sec < 0) sec = 0;
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }
+
+  function battleHud() {
+    $("bhTime").textContent = bFmt(bLeft);
+    $("bhMyScore").textContent = bScore;
+    $("bhMyMiss").textContent = `❌ ${bMisses}/${bMaxMisses}`;
+  }
+
+  $("battleFind").addEventListener("click", () => {
+    if (!API.getToken()) { $("battleNote").textContent = "로그인이 필요합니다."; return; }
+    if (typeof Socket === "undefined") { $("battleNote").textContent = "연결이 준비되지 않았습니다."; return; }
+    $("battleNote").textContent = "";
+    $("battleResult").innerHTML = "";
+    Socket.send({ type: "battle_queue" });
+  });
+
+  $("battleCancel").addEventListener("click", () => {
+    if (typeof Socket !== "undefined") Socket.send({ type: "battle_cancel" });
+  });
+
+  if (typeof Socket !== "undefined") {
+    Socket.on("battle_waiting", () => {
+      $("battleIdle").classList.add("hidden");
+      $("battleWaiting").classList.remove("hidden");
+      $("battleLive").classList.add("hidden");
+    });
+
+    Socket.on("battle_cancelled", () => {
+      $("battleWaiting").classList.add("hidden");
+      $("battleIdle").classList.remove("hidden");
+    });
+
+    Socket.on("battle_start", (msg) => {
+      setMode("battle");
+      $("battleWaiting").classList.add("hidden");
+      $("battleIdle").classList.add("hidden");
+      $("battleLive").classList.remove("hidden");
+      $("trainView").classList.remove("hidden");
+
+      bSet = msg.puzzles || [];
+      bIndex = 0; bScore = 0; bMisses = 0;
+      bLeft = msg.seconds || 180;
+      bMaxMisses = msg.maxMisses || 3;
+      bRunning = true;
+
+      const me = API.getUser();
+      $("bhMe").textContent = me ? me.username : "나";
+      $("bhOpp").textContent = msg.opponent ? `${msg.opponent.name} (${msg.opponent.rating})` : "상대";
+      $("bhOppScore").textContent = "0";
+      $("bhOppMiss").textContent = `❌ 0/${bMaxMisses}`;
+      battleHud();
+      Sounds.play("gameStart");
+
+      if (bTimer) clearInterval(bTimer);
+      bTimer = setInterval(() => {
+        bLeft--;
+        battleHud();
+        if (bLeft <= 0) battleFinish();
+      }, 1000);
+
+      nextBattlePuzzle();
+    });
+
+    Socket.on("battle_opponent", (msg) => {
+      $("bhOppScore").textContent = msg.score;
+      $("bhOppMiss").textContent = `❌ ${msg.misses}/${bMaxMisses}`;
+    });
+
+    Socket.on("battle_over", (msg) => {
+      bRunning = false;
+      if (bTimer) { clearInterval(bTimer); bTimer = null; }
+      $("battleLive").classList.add("hidden");
+      $("battleIdle").classList.remove("hidden");
+
+      const KO = { win: "🏆 승리!", loss: "😢 패배", draw: "🤝 무승부" };
+      $("battleResult").innerHTML =
+        `<div class="status"><b>${KO[msg.result] || msg.result}</b> — ` +
+        `${msg.myScore} : ${msg.opponentScore} vs ${window.kiwiEscapeHtml(msg.opponentName)} ` +
+        `<span class="muted">(${window.kiwiEscapeHtml(msg.reason)})</span></div>`;
+      Sounds.play(msg.result === "win" ? "win" : msg.result === "loss" ? "lose" : "draw");
+      loadBattleBoard();
+      if (window.kiwiNotifyRefresh) window.kiwiNotifyRefresh();
+    });
+  }
+
+  function nextBattlePuzzle() {
+    if (!bRunning) return;
+    if (bIndex >= bSet.length) { battleFinish(); return; }
+    puzzle = bSet[bIndex++];
+    setupPuzzle();
+    setStatus(`⚔️ 전투 중 — ${bScore}점`);
+  }
+
+  function battleCorrect() {
+    if (!bRunning) return;
+    bScore++;
+    battleHud();
+    Sounds.play("win");
+    if (typeof Socket !== "undefined") {
+      Socket.send({ type: "battle_progress", score: bScore, misses: bMisses });
+    }
+    setTimeout(nextBattlePuzzle, 300);
+  }
+
+  function battleMiss() {
+    if (!bRunning) return;
+    bMisses++;
+    battleHud();
+    Sounds.play("lose");
+    if (typeof Socket !== "undefined") {
+      Socket.send({ type: "battle_progress", score: bScore, misses: bMisses });
+    }
+    if (bMisses >= bMaxMisses) { battleFinish(); return; }
+    setTimeout(nextBattlePuzzle, 400);
+  }
+
+  function battleFinish() {
+    if (!bRunning) return;
+    bRunning = false;
+    if (bTimer) { clearInterval(bTimer); bTimer = null; }
+    setStatus("전투 종료 — 상대를 기다리는 중…");
+    if (typeof Socket !== "undefined") {
+      Socket.send({ type: "battle_done", score: bScore, misses: bMisses });
+    }
+  }
+
+  async function loadBattleBoard() {
+    try {
+      const { leaderboard } = await API.battleLeaderboard();
+      const box = $("battleBoard");
+      if (!leaderboard.length) { box.innerHTML = '<p class="muted">아직 전투 기록이 없습니다.</p>'; return; }
+      box.innerHTML = leaderboard.map((u, i) => `
+        <div class="lb-row">
+          <span class="lb-rank">${i + 1}</span>
+          <span class="name">${window.kiwiEscapeHtml(u.username)}</span>
+          <span class="rating">${u.wins}승 ${u.losses}패</span>
+        </div>`).join("");
+    } catch (e) { /* noop */ }
+  }
+
+  // 로그인 상태면 소켓 연결(전투용)
+  if (API.getToken() && typeof Socket !== "undefined") {
+    try { Socket.connect(API.getToken()); } catch (e) {}
   }
 
 })();

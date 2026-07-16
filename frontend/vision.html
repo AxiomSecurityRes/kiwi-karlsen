@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="kiwi-version" content="28" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="30초 좌표·수순 스피드런으로 체스판 감각을 기르세요." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="30초 좌표·수순 스피드런으로 체스판 감각을 기르세요." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
+  <title>시각 훈련 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28">퍼즐</a>
+      <a href="/vision.html?v=23" class="active">시각</a>
+      <a href="/openings.html?v=28">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=24">통찰</a>
+      <a href="/clubs.html?v=23">클럽</a>
+      <a href="/players.html?v=23">사용자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="grid two">
+      <div class="card">
+        <div class="vision-hud" id="vHud">
+          <span>⏱ <b id="vTime">30</b></span>
+          <span>✅ <b id="vScore">0</b></span>
+          <span>❌ <b id="vMiss">0</b></span>
+        </div>
+
+        <div class="vision-prompt" id="vPrompt">준비</div>
+
+        <div class="board-wrap"><div id="vision-board"></div></div>
+
+        <div class="center" style="margin-top:10px;">
+          <button class="btn" id="vStart">시작</button>
+          <button class="btn secondary hidden" id="vStop">중단</button>
+        </div>
+        <div id="vResult"></div>
+      </div>
+
+      <div class="card">
+        <h2>👁️ 시각 훈련</h2>
+        <p class="muted" id="vDesc">체스 좌표 감각은 기보를 읽고 머릿속으로 계산하는 데 필수적인 기초 능력입니다.</p>
+
+        <label>모드</label>
+        <select id="vMode" style="width:100%;">
+          <option value="coords">좌표 — 표시된 칸을 클릭 (30초)</option>
+          <option value="moves">수순 — 표시된 수의 도착 칸을 클릭 (30초)</option>
+        </select>
+
+        <label style="display:flex;flex-direction:row;align-items:center;gap:8px;margin-top:10px;">
+          <input type="checkbox" id="vFlip" style="width:auto;margin:0;" />
+          흑 시점으로 보기 (난이도 ↑)
+        </label>
+
+        <div class="vision-best" id="vBest"></div>
+
+        <h3 style="margin-top:16px;">🏆 순위</h3>
+        <div id="vBoard"></div>
+
+        <h3 style="margin-top:14px;">내 기록</h3>
+        <div id="vHistory"><p class="muted">로그인하면 기록이 저장됩니다.</p></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 시각 훈련 · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
+
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/sounds.js?v=28"></script>
+  <script src="/js/vision.js?v=28"></script>
+</body>
+</html>

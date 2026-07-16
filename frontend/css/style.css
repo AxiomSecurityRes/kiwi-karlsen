@@ -796,3 +796,567 @@ label { display: block; font-weight: 600; font-size: var(--t-sm); margin-bottom:
   color: var(--accent-strong);
 }
 .ach.locked.show-desc .ach-state { color: var(--ink-soft); }
+
+/* ==========================================================================
+   오프닝 탐색기 + 배우기
+   ========================================================================== */
+
+/* ---- 필터 칩 ---- */
+.exp-filters { margin-bottom: var(--sp-3); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
+.chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  font-family: var(--font-data);
+  cursor: pointer;
+  min-height: 32px;
+}
+.chip:hover { border-color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent-strong); color: var(--accent-ink); }
+
+/* ---- 승/무/패 막대 ---- */
+.wdl {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--line);
+  width: 100%;
+}
+.wdl-w { background: #f2f0e4; }
+.wdl-d { background: #9aa88c; }
+.wdl-b { background: #3a3f33; }
+:root[data-theme="dark"] .wdl-w { background: #e7efdc; }
+:root[data-theme="dark"] .wdl-b { background: #11170f; }
+.wdl-legend {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-data); font-size: var(--t-xs);
+  color: var(--ink-soft); margin-top: 3px;
+}
+
+.exp-summary {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: var(--sp-3);
+}
+.exp-total { font-family: var(--font-data); margin-bottom: 6px; }
+.exp-total b { font-size: var(--t-lg); color: var(--accent-strong); }
+.exp-warn { color: var(--gold); font-size: var(--t-xs); font-weight: 700; }
+
+/* ---- 수순 테이블 ---- */
+.exp-head {
+  display: grid;
+  grid-template-columns: 58px 84px 1fr;
+  gap: var(--sp-2);
+  font-size: var(--t-xs);
+  font-weight: 800;
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.exp-move {
+  display: grid;
+  grid-template-columns: 58px 84px 1fr;
+  gap: var(--sp-2);
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: inherit;
+  min-height: 46px;
+}
+.exp-move:hover { background: var(--surface-2); }
+.em-san { font-family: var(--font-data); font-weight: 800; font-size: var(--t-base); }
+.em-games { font-family: var(--font-data); font-size: var(--t-sm); display: flex; flex-direction: column; }
+.em-games small { color: var(--ink-soft); font-size: 0.68rem; }
+.em-bar { display: flex; flex-direction: column; gap: 2px; }
+.em-bar small { font-family: var(--font-data); font-size: 0.66rem; color: var(--ink-soft); }
+
+/* ---- 배우기 ---- */
+.learn-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.learn-unit {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-3);
+  overflow: hidden;
+}
+.lu-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+.lu-level {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-data);
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.lu-title { font-weight: 800; flex: 1; display: flex; flex-direction: column; }
+.lu-title small { font-weight: 400; font-size: var(--t-xs); color: var(--ink-soft); }
+.lu-prog { font-family: var(--font-data); font-weight: 800; color: var(--accent-strong); }
+.lu-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
+  padding: 10px;
+}
+.lu-item {
+  position: relative;
+  display: flex; flex-direction: column; gap: 2px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  min-height: 52px;
+}
+.lu-item:hover { border-color: var(--accent); }
+.lu-item.mastered { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--surface)); }
+.lu-item b { font-size: var(--t-sm); }
+.lu-item small { font-family: var(--font-data); font-size: var(--t-xs); color: var(--ink-soft); }
+.lu-check { position: absolute; top: 6px; right: 8px; }
+
+.learn-modes { display: flex; gap: 6px; margin-bottom: var(--sp-2); }
+.learn-modes .btn.active { background: var(--accent); color: var(--accent-ink); }
+.quiz-score {
+  display: flex; gap: var(--sp-3); justify-content: space-around;
+  background: var(--k-seed); color: var(--k-core);
+  border-radius: var(--radius-sm); padding: 8px;
+  font-family: var(--font-data); font-size: var(--t-sm);
+  margin: var(--sp-2) 0;
+}
+.lp-master { color: var(--gold); font-weight: 800; }
+
+@media (max-width: 560px) {
+  .exp-head, .exp-move { grid-template-columns: 46px 66px 1fr; }
+  .lu-items { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   퍼즐 전투 + 시각(Vision) 훈련
+   ========================================================================== */
+
+/* ---- 전투 HUD ---- */
+.battle-hud {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--sp-3);
+  align-items: center;
+  background: var(--k-seed);
+  color: var(--k-core);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: var(--sp-3) 0;
+}
+.bh-side { text-align: center; min-width: 0; }
+.bh-name {
+  font-weight: 800; font-size: var(--t-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bh-score {
+  font-family: var(--font-data);
+  font-size: 2rem; font-weight: 800;
+  color: var(--accent);
+  line-height: 1.1;
+}
+.bh-miss { font-family: var(--font-data); font-size: var(--t-xs); opacity: 0.8; }
+.bh-mid { text-align: center; }
+.bh-time {
+  font-family: var(--font-data);
+  font-size: var(--t-xl); font-weight: 800;
+  color: var(--gold);
+}
+
+/* ---- 시각 훈련 ---- */
+.vision-hud {
+  display: flex;
+  gap: var(--sp-4);
+  justify-content: center;
+  background: var(--k-seed);
+  color: var(--k-core);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: var(--font-data);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  margin-bottom: var(--sp-2);
+}
+.vision-hud b { font-size: var(--t-xl); color: var(--accent); }
+
+.vision-prompt {
+  font-family: var(--font-data);
+  font-size: 3rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--accent-strong);
+  letter-spacing: 0.04em;
+  padding: var(--sp-3) 0;
+  min-height: 84px;
+  line-height: 1.1;
+}
+.vision-prompt.with-board { font-size: 2.2rem; }
+
+.vision-best {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+
+/* 정답/오답 칸 표시 */
+.v-ok { box-shadow: inset 0 0 0 5px var(--accent) !important; }
+.v-bad { box-shadow: inset 0 0 0 5px var(--danger) !important; }
+
+/* 시각 모드 보드는 클릭만 (드래그 방지) */
+#vision-board, #vision-board * {
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  cursor: pointer;
+}
+#vision-board [data-square] { position: relative; }
+
+@media (max-width: 560px) {
+  .vision-prompt { font-size: 2.4rem; min-height: 66px; }
+  .vision-prompt.with-board { font-size: 1.8rem; }
+  .bh-score { font-size: 1.5rem; }
+}
+
+/* ==========================================================================
+   체스 클럽
+   ========================================================================== */
+.club-create {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.club-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  text-align: left;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--ink);
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+.club-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.club-emoji { font-size: 1.9rem; line-height: 1; flex-shrink: 0; }
+.cc-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cc-body b { font-size: var(--t-base); }
+.cc-body small {
+  color: var(--ink-soft); font-size: var(--t-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cc-meta { display: flex; flex-direction: column; align-items: center; gap: 2px; flex-shrink: 0; }
+.cc-meta b { font-family: var(--font-data); font-size: var(--t-lg); color: var(--accent-strong); }
+.cc-meta small { font-size: 0.65rem; color: var(--ink-soft); }
+
+.club-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.club-head .club-emoji { font-size: 2.4rem; }
+
+/* 게시글 */
+.club-post {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  margin-bottom: 8px;
+  background: var(--surface);
+}
+.club-post.pinned {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 8%, var(--surface));
+}
+.cp-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cp-head b { flex: 1; min-width: 0; }
+.cp-meta { font-size: var(--t-xs); color: var(--ink-soft); font-family: var(--font-data); }
+.cp-body { margin: 6px 0; font-size: var(--t-sm); line-height: 1.6; }
+.cp-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.cp-pin { color: var(--gold); }
+
+/* 채팅 */
+.club-chat {
+  height: 260px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: var(--t-sm);
+}
+.club-msg {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+}
+.club-msg.me .cmsg-who { color: var(--accent-strong); }
+.cmsg-who { font-weight: 800; flex-shrink: 0; }
+.cmsg-text { flex: 1; min-width: 0; word-break: break-word; }
+.cmsg-del {
+  background: none; border: none; color: var(--ink-soft);
+  cursor: pointer; font-size: 0.8rem; opacity: 0; padding: 0 3px;
+}
+.club-msg:hover .cmsg-del { opacity: 1; }
+.cmsg-del:hover { color: var(--danger); }
+
+.cm-actions { display: flex; gap: 4px; margin-left: auto; }
+.btn.active { background: var(--accent-strong); color: #fff; }
+
+@media (max-width: 560px) {
+  .cmsg-del { opacity: 1; }
+  .club-chat { height: 220px; }
+}
+
+/* ==========================================================================
+   통찰 (Insights) + 차트
+   ========================================================================== */
+.kchart { width: 100%; height: auto; display: block; }
+.kc-lab {
+  font-family: var(--font-data);
+  font-size: 10px;
+  fill: var(--ink-soft);
+}
+
+/* 가로 막대 */
+.kbar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.3fr) 2fr auto;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: 5px 0;
+  font-size: var(--t-sm);
+}
+.kbar-label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600;
+}
+.kbar-track {
+  height: 14px;
+  background: var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.kbar-fill { display: block; height: 100%; border-radius: 7px; transition: width 0.4s ease; }
+.kbar-val {
+  font-family: var(--font-data);
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* 도넛 */
+.kdonut { display: flex; gap: var(--sp-4); align-items: center; flex-wrap: wrap; }
+.kd-center { font-family: var(--font-data); font-size: 22px; font-weight: 800; fill: var(--ink); }
+.kd-sub { font-size: 10px; fill: var(--ink-soft); }
+.kd-legend { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 150px; }
+.kd-item { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); }
+.kd-item b { font-family: var(--font-data); margin-left: auto; }
+.kd-item small { color: var(--ink-soft); width: 34px; text-align: right; }
+.kd-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* 히트맵 */
+.heatmap { display: flex; flex-direction: column; gap: 3px; }
+.hm-row { display: flex; gap: 2px; align-items: center; }
+.hm-day {
+  width: 22px; flex-shrink: 0;
+  font-size: var(--t-xs); font-weight: 700; color: var(--ink-soft);
+}
+.hm-cell { flex: 1; height: 15px; border-radius: 3px; min-width: 6px; }
+.hm-hours { margin-top: 2px; }
+.hm-hour {
+  flex: 1; text-align: center; min-width: 6px;
+  font-family: var(--font-data); font-size: 0.6rem; color: var(--ink-soft);
+}
+
+/* 통찰 행 */
+.ins-row { margin-bottom: var(--sp-3); }
+.ins-row-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.ins-score { margin-left: auto; font-family: var(--font-data); font-weight: 800; color: var(--accent-strong); }
+.ins-score small { font-weight: 400; color: var(--ink-soft); }
+.ins-highlight { display: flex; flex-direction: column; gap: 5px; }
+.ins-good { color: var(--accent-strong); font-size: var(--t-sm); }
+.ins-bad { color: var(--danger); font-size: var(--t-sm); }
+
+@media (max-width: 560px) {
+  .kbar-row { grid-template-columns: minmax(70px, 1fr) 1.4fr auto; font-size: var(--t-xs); }
+  .hm-cell { height: 12px; }
+}
+
+/* ==========================================================================
+   계정 보안 · 문서 페이지
+   ========================================================================== */
+.sec-status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--sp-2);
+}
+.tf-secret {
+  font-family: var(--font-data);
+  font-size: var(--t-lg);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: var(--surface-2);
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+  word-break: break-all;
+  margin-bottom: var(--sp-2);
+}
+.backup-codes {
+  background: color-mix(in srgb, var(--gold) 12%, var(--surface));
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.bc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  margin: var(--sp-2) 0;
+}
+.bc-grid code {
+  font-family: var(--font-data);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* 문서(약관/가이드) */
+.doc { line-height: 1.75; }
+.doc h3 { margin-top: var(--sp-4); color: var(--accent-strong); }
+.doc ul { padding-left: 1.2em; }
+.doc li { margin: 4px 0; }
+.doc code {
+  font-family: var(--font-data);
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+.doc-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); margin: var(--sp-2) 0; }
+.doc-table th, .doc-table td {
+  border: 1px solid var(--line);
+  padding: 7px 9px;
+  text-align: left;
+}
+.doc-table th { background: var(--surface-2); font-weight: 800; }
+.doc-note {
+  background: var(--surface-2);
+  border-left: 4px solid var(--gold);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-top: var(--sp-4);
+  font-size: var(--t-sm);
+}
+
+/* 가이드 단계 */
+.guide-steps { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-3); }
+.gstep { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.gs-num {
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  font-family: var(--font-data); font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.gstep p { margin: 3px 0 0; font-size: var(--t-sm); color: var(--ink-soft); }
+
+/* 업데이트 내역 */
+.changelog { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-3); }
+.cl-item { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.cl-ver {
+  font-family: var(--font-data);
+  font-weight: 800;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+  flex-shrink: 0;
+  font-size: var(--t-xs);
+}
+.cl-item ul { margin: 5px 0 0; font-size: var(--t-sm); }
+
+/* ==========================================================================
+   게임 리뷰 (v28) — 수 퀄리티 11단계
+   ========================================================================== */
+.rv-head {
+  display: grid;
+  grid-template-columns: 26px 1fr 60px 60px;
+  gap: 6px;
+  font-size: var(--t-xs);
+  font-weight: 800;
+  color: var(--ink-soft);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+.review-summary .sum-row {
+  display: grid;
+  grid-template-columns: 26px 1fr 60px 60px;
+  gap: 6px;
+  align-items: center;
+  margin: 3px 0;
+  font-size: var(--t-sm);
+}
+.rv-icon {
+  font-family: var(--font-data);
+  font-weight: 800;
+  text-align: center;
+  font-size: var(--t-sm);
+}
+.rv-name { font-weight: 600; }
+.rv-w, .rv-b { font-family: var(--font-data); text-align: center; }
+.rv-acc { background: var(--surface); border-radius: 6px; padding: 4px 0; }
+.rv-acc b { color: var(--accent-strong); font-size: var(--t-base); }
+.rv-divider { height: 1px; background: var(--line); margin: 6px 0; }
+
+/* 수 분류 색 */
+.rv-brilliant { color: #1bb7a6; }
+.rv-great { color: #3aa0ff; }
+.rv-best { color: #2e9b53; }
+.rv-excellent { color: #5aa832; }
+.rv-good { color: #9bbf5a; }
+.rv-book { color: #a98b6a; }
+.rv-forced { color: #8a97a6; }
+.rv-inaccuracy { color: #e0a526; }
+.rv-mistake { color: #e07b39; }
+.rv-missed { color: #d96b8a; }
+.rv-blunder { color: #c0392b; }

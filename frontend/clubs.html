@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="kiwi-version" content="28" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="체스 클럽을 만들고 함께 공부하고 국면을 공유하세요." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="체스 클럽을 만들고 함께 공부하고 국면을 공유하세요." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
+  <title>체스 클럽 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28">퍼즐</a>
+      <a href="/vision.html?v=24">시각</a>
+      <a href="/openings.html?v=28">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=24">통찰</a>
+      <a href="/clubs.html?v=24" class="active">클럽</a>
+      <a href="/players.html?v=24">사용자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- ============ 클럽 목록 ============ -->
+    <section id="clubListView">
+      <div class="card">
+        <h2>🏰 체스 클럽</h2>
+        <p class="muted">함께 공부하고, 국면을 공유하고, 대화하세요.</p>
+        <div id="clubStats" class="learn-stats"></div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+          <input type="text" id="clubSearch" placeholder="클럽 이름 검색" style="flex:1;min-width:150px;margin:0;" />
+          <button class="btn small" id="clubSearchBtn">검색</button>
+          <button class="btn small secondary" id="clubMineBtn">내 클럽</button>
+          <button class="btn small brown" id="clubNewBtn">➕ 클럽 만들기</button>
+        </div>
+
+        <div id="clubCreate" class="hidden club-create">
+          <h3>새 클럽 만들기</h3>
+          <div class="form-grid">
+            <label>클럽 이름<input type="text" id="ccName" maxlength="60" placeholder="예: 키위 체스 클럽" /></label>
+            <label>아이콘<input type="text" id="ccEmoji" maxlength="4" value="🏰" /></label>
+          </div>
+          <label>소개<textarea id="ccDesc" rows="2" maxlength="500"
+            style="width:100%;border:2px solid var(--line);border-radius:9px;padding:8px;"></textarea></label>
+          <label style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+            <input type="checkbox" id="ccPublic" checked style="width:auto;margin:0;" /> 공개 클럽 (누구나 가입 가능)
+          </label>
+          <div style="margin-top:8px;">
+            <button class="btn" id="ccSubmit">만들기</button>
+            <button class="btn secondary" id="ccCancel">취소</button>
+          </div>
+          <p id="ccError" style="color:var(--danger);"></p>
+        </div>
+
+        <div id="clubList"><p class="muted">불러오는 중…</p></div>
+      </div>
+    </section>
+
+    <!-- ============ 클럽 상세 ============ -->
+    <section id="clubDetailView" class="hidden">
+      <div class="card">
+        <div class="club-head">
+          <span class="club-emoji" id="cdEmoji">🏰</span>
+          <div style="flex:1;min-width:0;">
+            <h2 id="cdName" style="margin:0;">클럽</h2>
+            <p class="muted" id="cdMeta"></p>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn small" id="cdJoin">가입</button>
+            <button class="btn small secondary hidden" id="cdLeave">탈퇴</button>
+            <button class="btn small danger hidden" id="cdDelete">클럽 삭제</button>
+            <button class="btn small secondary" id="cdBack">← 목록</button>
+          </div>
+        </div>
+        <p id="cdDesc" class="muted"></p>
+      </div>
+
+      <div class="grid two">
+        <div>
+          <!-- 공지물 / 게시글 -->
+          <div class="card">
+            <h2>📌 공지 · 게시글</h2>
+            <div id="cdPostForm" class="hidden">
+              <input type="text" id="cpTitle" placeholder="제목" maxlength="120" />
+              <textarea id="cpBody" rows="2" placeholder="내용" maxlength="3000"
+                style="width:100%;border:2px solid var(--line);border-radius:9px;padding:8px;"></textarea>
+              <input type="text" id="cpPgn" placeholder="기보(PGN) 또는 비워두기 — 예: 1. e4 e5 2. Nf3" />
+              <input type="text" id="cpFen" placeholder="국면(FEN) 또는 비워두기" />
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <label id="cpPinWrap" class="hidden" style="display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;">
+                  <input type="checkbox" id="cpPin" style="width:auto;margin:0;" /> 📌 고정
+                </label>
+                <button class="btn small" id="cpSubmit">등록</button>
+                <span id="cpError" style="color:var(--danger);font-size:0.85rem;"></span>
+              </div>
+            </div>
+            <div id="cdPosts" style="margin-top:10px;"></div>
+          </div>
+        </div>
+
+        <div>
+          <!-- 채팅 -->
+          <div class="card">
+            <h2>💬 클럽 채팅</h2>
+            <div id="cdChat" class="club-chat"><p class="muted">구성원만 이용할 수 있습니다.</p></div>
+            <div id="cdChatForm" class="hidden" style="display:flex;gap:6px;margin-top:8px;">
+              <input type="text" id="cmText" placeholder="메시지…" maxlength="600" style="margin:0;" />
+              <button class="btn small" id="cmSend">전송</button>
+            </div>
+          </div>
+
+          <!-- 구성원 -->
+          <div class="card">
+            <h2>👥 구성원 <span class="muted" id="cdMemberCount"></span></h2>
+            <div id="cdMembers"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 클럽 보드 모달 -->
+    <div class="modal-bg" id="boardModal">
+      <div class="modal" style="max-width:520px;">
+        <h2 id="bmTitle">국면</h2>
+        <div class="board-wrap" style="max-width:400px;"><div id="club-board"></div></div>
+        <div id="bmMoves" class="movelist" style="max-height:110px;margin-top:8px;"></div>
+        <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn small secondary" id="bmPrev">◀</button>
+          <button class="btn small secondary" id="bmNext">▶</button>
+          <button class="btn small brown" id="bmAnalyze">📊 분석에서 열기</button>
+          <button class="btn small" id="bmClose">닫기</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 체스 클럽 · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
+
+  <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
+  <script src="/assets/vendor/chess-0.10.3.min.js"></script>
+  <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/sounds.js?v=28"></script>
+  <script src="/js/clubs.js?v=28"></script>
+</body>
+</html>

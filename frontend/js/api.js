@@ -1,6 +1,6 @@
 /* 앱 버전 — 캐시된 옛 페이지로 이동하지 않도록 링크에 붙인다.
    (scripts/bump_version.py 가 자동 갱신) */
-window.KIWI_VERSION = "20";
+window.KIWI_VERSION = "28";
 window.kiwiPageUrl = function (page) {
   const p = String(page).replace(/^\/*/, "/");
   return p + (p.indexOf("?") === -1 ? "?v=" : "&v=") + window.KIWI_VERSION;
@@ -57,10 +57,28 @@ const API = (() => {
 
   return {
     getToken, getUser, setSession, clearSession,
-    login: (username, password) =>
-      request("/api/login", { method: "POST", body: JSON.stringify({ username, password }) }),
-    register: (username, password) =>
-      request("/api/register", { method: "POST", body: JSON.stringify({ username, password }) }),
+    login: (username, password, code) =>
+      request("/api/login", { method: "POST",
+        body: JSON.stringify({ username, password, code: code || null }) }),
+    register: (username, password, extra) =>
+      request("/api/register", { method: "POST",
+        body: JSON.stringify({ username, password,
+                               acceptTerms: !!(extra && extra.acceptTerms),
+                               website: (extra && extra.website) || "" }) }),
+    // 계정 보안
+    accountSecurity: () => request("/api/account/security"),
+    accountPassword: (current_password, new_password) =>
+      request("/api/account/password", { method: "POST",
+        body: JSON.stringify({ current_password, new_password }) }),
+    accountLogoutAll: () => request("/api/account/logout-all", { method: "POST" }),
+    twoFactorSetup: () => request("/api/account/2fa/setup", { method: "POST" }),
+    twoFactorEnable: (code) =>
+      request("/api/account/2fa/enable", { method: "POST", body: JSON.stringify({ code }) }),
+    twoFactorDisable: (password) =>
+      request("/api/account/2fa/disable", { method: "POST", body: JSON.stringify({ password }) }),
+    accountDelete: (password, confirm) =>
+      request("/api/account/delete", { method: "POST",
+        body: JSON.stringify({ password, confirm }) }),
     me: () => request("/api/me"),
     streakPing: () => request("/api/streak/ping", { method: "POST" }),
     bots: () => request("/api/bots"),
@@ -135,10 +153,72 @@ const API = (() => {
     rushLeaderboard: (mode = "3m") => request("/api/rush/leaderboard?mode=" + encodeURIComponent(mode)),
     rushHistory: () => request("/api/rush/history"),
     puzzleLeaderboard: () => request("/api/puzzles/leaderboard"),
+    // 시각(Vision) 훈련
+    visionModes: () => request("/api/vision/modes"),
+    visionQuestions: (mode, count = 120) =>
+      request("/api/vision/questions?mode=" + encodeURIComponent(mode) + "&count=" + count),
+    visionResult: (mode, score, misses) =>
+      request("/api/vision/result", { method: "POST", body: JSON.stringify({ mode, score, misses }) }),
+    visionLeaderboard: (mode) => request("/api/vision/leaderboard?mode=" + encodeURIComponent(mode)),
+    visionHistory: () => request("/api/vision/history"),
+    // 통찰 (Insights)
+    insights: (days = 0) => request("/api/insights" + (days ? "?days=" + days : "")),
+    insightsOf: (username) => request("/api/insights/" + encodeURIComponent(username)),
+    insightsSaveReview: (data) =>
+      request("/api/insights/review", { method: "POST", body: JSON.stringify(data) }),
+    // 체스 클럽
+    clubs: (q, mine) => {
+      const p = new URLSearchParams();
+      if (q) p.set("q", q);
+      if (mine) p.set("mine", "true");
+      const qs = p.toString();
+      return request("/api/clubs" + (qs ? "?" + qs : ""));
+    },
+    clubCreate: (data) => request("/api/clubs", { method: "POST", body: JSON.stringify(data) }),
+    clubDetail: (slug) => request("/api/clubs/" + encodeURIComponent(slug)),
+    clubDelete: (slug) => request("/api/clubs/" + encodeURIComponent(slug), { method: "DELETE" }),
+    clubJoin: (slug) => request("/api/clubs/" + encodeURIComponent(slug) + "/join", { method: "POST" }),
+    clubLeave: (slug) => request("/api/clubs/" + encodeURIComponent(slug) + "/leave", { method: "POST" }),
+    clubRole: (slug, userId, role) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/role",
+              { method: "POST", body: JSON.stringify({ userId, role }) }),
+    clubKick: (slug, userId) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/kick",
+              { method: "POST", body: JSON.stringify({ userId }) }),
+    clubPostCreate: (slug, data) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/posts",
+              { method: "POST", body: JSON.stringify(data) }),
+    clubPostDelete: (slug, id) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/posts/" + id, { method: "DELETE" }),
+    clubPostPin: (slug, id, pinned) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/posts/" + id + "/pin",
+              { method: "POST", body: JSON.stringify({ pinned }) }),
+    clubMessages: (slug, after = 0) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/messages?after=" + after),
+    clubMessageSend: (slug, text) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/messages",
+              { method: "POST", body: JSON.stringify({ text }) }),
+    clubMessageDelete: (slug, id) =>
+      request("/api/clubs/" + encodeURIComponent(slug) + "/messages/" + id, { method: "DELETE" }),
+    // 퍼즐 전투
+    battleLeaderboard: () => request("/api/battle/leaderboard"),
+    battleHistory: () => request("/api/battle/history"),
     openings: (moves) => request("/api/openings" + (moves && moves.length ? "?moves=" + encodeURIComponent(moves.join(",")) : "")),
     openingsSearch: (q) => request("/api/openings/search?q=" + encodeURIComponent(q)),
     openingsBook: (moves) =>
       request("/api/openings/book", { method: "POST", body: JSON.stringify({ moves }) }),
+    explorer: (moves, ratings, speeds, source) => {
+      const p = new URLSearchParams();
+      if (moves && moves.length) p.set("moves", moves.join(","));
+      if (ratings && ratings.length) p.set("ratings", ratings.join(","));
+      if (speeds && speeds.length) p.set("speeds", speeds.join(","));
+      if (source) p.set("source", source);
+      const qs = p.toString();
+      return request("/api/explorer" + (qs ? "?" + qs : ""));
+    },
+    learnCurriculum: () => request("/api/learn/curriculum"),
+    learnResult: (openingKey, score) =>
+      request("/api/learn/result", { method: "POST", body: JSON.stringify({ openingKey, score }) }),
     achievements: () => request("/api/achievements"),
     achievementsOf: (username) => request("/api/achievements/" + encodeURIComponent(username)),
     notifications: () => request("/api/notifications"),

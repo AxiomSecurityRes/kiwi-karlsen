@@ -40,6 +40,8 @@
   function setAuthMode(mode) {
     authMode = mode;
     $("loginError").textContent = "";
+    $("termsWrap").classList.toggle("hidden", mode !== "register");
+    $("totpWrap").classList.add("hidden");
     if (mode === "login") {
       $("authTitle").textContent = "🥝 로그인";
       $("authSubtitle").textContent = "키위 카를센에 오신 것을 환영합니다.";
@@ -65,16 +67,36 @@
       $("loginError").textContent = "사용자 이름은 2자 이상이어야 합니다.";
       return;
     }
-    if (password.length < 6) {
-      $("loginError").textContent = "비밀번호는 6자 이상이어야 합니다.";
+    if (password.length < 8) {
+      $("loginError").textContent = "비밀번호는 8자 이상이어야 합니다.";
       return;
     }
+    if (authMode === "register" && !$("acceptTerms").checked) {
+      $("loginError").textContent = "이용약관과 개인정보 처리방침에 동의해주세요.";
+      return;
+    }
+
     $("loginBtn").disabled = true;
     try {
-      const fn = authMode === "register" ? API.register : API.login;
-      const { token, user } = await fn(username, password);
-      API.setSession(token, user);
-      enterApp(user, token);
+      let res;
+      if (authMode === "register") {
+        res = await API.register(username, password, {
+          acceptTerms: true,
+          website: $("hp_website").value,   // 허니팟(사람은 비워둠)
+        });
+      } else {
+        const code = $("loginTotp").value.trim();
+        res = await API.login(username, password, code);
+        // 2단계 인증이 켜진 계정 → 코드 입력칸 표시
+        if (res && res.twoFactorRequired) {
+          $("totpWrap").classList.remove("hidden");
+          $("loginTotp").focus();
+          $("loginError").textContent = "2단계 인증 코드를 입력해주세요.";
+          return;
+        }
+      }
+      API.setSession(res.token, res.user);
+      enterApp(res.user, res.token);
     } catch (e) {
       $("loginError").textContent = e.message;
     } finally {

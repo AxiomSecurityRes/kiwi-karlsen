@@ -152,6 +152,42 @@ ACHIEVEMENTS: list[dict] = [
      "icon": "🌟",
      "check": lambda u, c: (u.wins + u.losses + u.draws) >= 10 and u.puzzles_solved >= 50
                            and max(u.rush_best_3m, u.rush_best_5m, u.rush_best_survival) >= 10},
+
+    # 퍼즐 전투
+    {"code": "battle_first", "name": "첫 전투", "desc": "퍼즐 전투를 처음 치렀습니다.",
+     "icon": "⚔️", "check": lambda u, c: (u.battle_wins or 0) + (u.battle_losses or 0) >= 1},
+    {"code": "battle_win_1", "name": "첫 전투 승리", "desc": "퍼즐 전투에서 처음 이겼습니다.",
+     "icon": "🛡️", "check": lambda u, c: (u.battle_wins or 0) >= 1},
+    {"code": "battle_win_10", "name": "전투 베테랑", "desc": "퍼즐 전투에서 10승을 거뒀습니다.",
+     "icon": "🏹", "check": lambda u, c: (u.battle_wins or 0) >= 10},
+    {"code": "battle_win_50", "name": "전투 챔피언", "desc": "퍼즐 전투에서 50승을 거뒀습니다.",
+     "icon": "👑", "check": lambda u, c: (u.battle_wins or 0) >= 50},
+
+    # 시각(Vision) 훈련
+    {"code": "vision_first", "name": "눈을 뜨다", "desc": "시각 훈련을 처음 완료했습니다.",
+     "icon": "👁️", "check": lambda u, c: max(u.vision_best_coords or 0, u.vision_best_moves or 0) >= 1},
+    {"code": "vision_coords_20", "name": "좌표 감각", "desc": "좌표 모드에서 30초에 20개를 맞혔습니다.",
+     "icon": "🧭", "check": lambda u, c: (u.vision_best_coords or 0) >= 20},
+    {"code": "vision_coords_35", "name": "좌표의 달인", "desc": "좌표 모드에서 30초에 35개를 맞혔습니다.",
+     "icon": "🎯", "check": lambda u, c: (u.vision_best_coords or 0) >= 35},
+    {"code": "vision_moves_20", "name": "수읽기의 눈", "desc": "수순 모드에서 30초에 20개를 맞혔습니다.",
+     "icon": "🔮", "check": lambda u, c: (u.vision_best_moves or 0) >= 20},
+
+    # 오프닝 배우기
+    {"code": "learn_first", "name": "첫 정석", "desc": "오프닝을 하나 마스터했습니다.",
+     "icon": "📗", "check": lambda u, c: c.get("openingsMastered", 0) >= 1},
+    {"code": "learn_10", "name": "정석 수집가", "desc": "오프닝 10개를 마스터했습니다.",
+     "icon": "📚", "check": lambda u, c: c.get("openingsMastered", 0) >= 10},
+    {"code": "learn_all", "name": "오프닝 마스터", "desc": "커리큘럼의 모든 오프닝을 마스터했습니다.",
+     "icon": "🎖️", "check": lambda u, c: c.get("openingsMastered", 0) >= 36},
+
+    # 체스 클럽
+    {"code": "club_join", "name": "클럽 입성", "desc": "체스 클럽에 처음 가입했습니다.",
+     "icon": "🏰", "check": lambda u, c: c.get("clubsJoined", 0) >= 1},
+    {"code": "club_owner", "name": "클럽 개설자", "desc": "직접 체스 클럽을 만들었습니다.",
+     "icon": "🗝️", "check": lambda u, c: c.get("clubsOwned", 0) >= 1},
+    {"code": "club_social", "name": "사교적인 키위", "desc": "클럽 3개에 가입했습니다.",
+     "icon": "🎪", "check": lambda u, c: c.get("clubsJoined", 0) >= 3},
 ]
 
 _BY_CODE = {a["code"]: a for a in ACHIEVEMENTS}

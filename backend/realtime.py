@@ -9,6 +9,7 @@
 import asyncio
 import secrets
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -43,6 +44,8 @@ class LiveGame:
     white_ms: int = 600_000
     black_ms: int = 600_000
     increment_ms: int = 0
+    minutes: int = 10          # 시간 제어(분) — 통찰용
+    increment: int = 0         # 증가(초) — 통찰용
     last_ts: float = field(default_factory=lambda: time.time())  # 마지막 시계 갱신 시각
     # 무승부 제안 중인 사용자 id (없으면 None)
     draw_offer_by: Optional[int] = None
@@ -67,6 +70,10 @@ class GameServer:
         self.games: dict[str, LiveGame] = {}
         # 대기 중인 도전: (보낸사람, 받는사람) -> {"minutes","increment"}
         self.pending: dict[tuple[int, int], dict] = {}
+        # 퍼즐 전투: 대기열 + 진행 중인 방
+        self.battle_queue: list[int] = []              # 매칭 대기 중인 user_id
+        self.battles: dict[str, dict] = {}             # battle_id -> 방 정보
+        self.user_battle: dict[int, str] = {}          # user_id -> battle_id
         self._lock = asyncio.Lock()
         self._watcher_started = False
         self.loop = None  # 이벤트 루프 (REST→WS 푸시용)
@@ -123,6 +130,18 @@ class GameServer:
 
     async def disconnect(self, user_id: int) -> None:
         ou = self.online.pop(user_id, None)
+
+        # 퍼즐 전투 정리 — 대기열에서 빼고, 진행 중이면 상대 부전승 처리
+        if user_id in self.battle_queue:
+            self.battle_queue.remove(user_id)
+        bid = self.user_battle.get(user_id)
+        if bid:
+            room = self.battles.get(bid)
+            if room and not room["finished"]:
+                p = room["players"].get(user_id)
+                if p:
+                    p["done"] = True
+                await self._finish_battle(bid, "상대 접속 종료")
         # 이 사용자와 관련된 대기 중 도전 정리 + 상대에게 취소 통보
         for (from_id, to_id) in self._clear_pending_for(user_id):
             other = to_id if from_id == user_id else from_id
@@ -178,6 +197,14 @@ class GameServer:
             await self._on_challenge_cancel(user_id, data)
         elif t == "rematch":
             await self._on_rematch(user_id, data)
+        elif t == "battle_queue":
+            await self._on_battle_queue(user_id, data)
+        elif t == "battle_cancel":
+            await self._on_battle_cancel(user_id)
+        elif t == "battle_progress":
+            await self._on_battle_progress(user_id, data)
+        elif t == "battle_done":
+            await self._on_battle_done(user_id, data)
         elif t == "move":
             await self._on_move(user_id, data)
         elif t == "resign":
@@ -294,6 +321,7 @@ class GameServer:
             id=game_id, white_id=white_id, black_id=black_id,
             white_name=white.username, black_name=black.username,
             white_ms=base_ms, black_ms=base_ms, increment_ms=increment * 1000,
+            minutes=minutes, increment=increment,
             last_ts=time.time(),
         )
         self.games[game_id] = game
@@ -461,6 +489,12 @@ class GameServer:
                     white_name=game.white_name, black_name=game.black_name,
                     result=result_str, reason=reason, pgn=self._board_pgn(game.board),
                     white_rating_change=white_delta, black_rating_change=black_delta,
+                    # 통찰(Insights) 용
+                    minutes=int(getattr(game, "minutes", 0) or 0),
+                    increment=int(getattr(game, "increment", 0) or 0),
+                    ply_count=len(game.board.move_stack),
+                    white_rating_after=float(new_white_rating),
+                    black_rating_after=float(new_black_rating),
                 ))
                 db.commit()
         except Exception:
@@ -502,6 +536,196 @@ class GameServer:
             return str(g)
         except Exception:
             return " ".join(m.uci() for m in board.move_stack)
+
+
+
+    # ==================================================================
+    #  퍼즐 전투 (실시간 1:1 퍼즐 대결)
+    # ==================================================================
+    BATTLE_SECONDS = 180
+    BATTLE_MAX_MISSES = 3
+
+    async def _on_battle_queue(self, user_id: int, data: dict) -> None:
+        """매칭 대기열에 참가. 상대가 있으면 즉시 방을 만든다."""
+        me = self.online.get(user_id)
+        if not me:
+            return
+        if user_id in self.user_battle:
+            await self._send(user_id, {"type": "error", "message": "이미 전투 중입니다."})
+            return
+        if user_id in self.battle_queue:
+            await self._send(user_id, {"type": "battle_waiting"})
+            return
+
+        # 대기열에서 다른 사람 찾기 (이미 나갔으면 건너뜀)
+        opponent_id = None
+        while self.battle_queue:
+            cand = self.battle_queue.pop(0)
+            if cand != user_id and cand in self.online and cand not in self.user_battle:
+                opponent_id = cand
+                break
+
+        if opponent_id is None:
+            self.battle_queue.append(user_id)
+            await self._send(user_id, {"type": "battle_waiting"})
+            return
+
+        # 방 생성 — 두 사람이 똑같은 퍼즐 세트를 푼다(공정)
+        from . import training
+        puzzles = training.rush_puzzles(60)
+        if not puzzles:
+            await self._send(user_id, {"type": "error", "message": "퍼즐 데이터가 없습니다."})
+            await self._send(opponent_id, {"type": "error", "message": "퍼즐 데이터가 없습니다."})
+            return
+
+        battle_id = uuid.uuid4().hex[:12]
+        opp = self.online.get(opponent_id)
+        room = {
+            "id": battle_id,
+            "players": {
+                user_id: {"score": 0, "misses": 0, "done": False,
+                          "name": me.username, "rating": round(me.rating)},
+                opponent_id: {"score": 0, "misses": 0, "done": False,
+                              "name": opp.username, "rating": round(opp.rating)},
+            },
+            "started": time.time(),
+            "puzzles": puzzles,
+            "finished": False,
+        }
+        self.battles[battle_id] = room
+        self.user_battle[user_id] = battle_id
+        self.user_battle[opponent_id] = battle_id
+
+        for uid, other in ((user_id, opponent_id), (opponent_id, user_id)):
+            o = room["players"][other]
+            await self._send(uid, {
+                "type": "battle_start",
+                "battleId": battle_id,
+                "seconds": self.BATTLE_SECONDS,
+                "maxMisses": self.BATTLE_MAX_MISSES,
+                "puzzles": puzzles,
+                "opponent": {"id": other, "name": o["name"], "rating": o["rating"]},
+            })
+
+        # 시간이 다 되면 자동 종료
+        asyncio.create_task(self._battle_timer(battle_id))
+
+    async def _on_battle_cancel(self, user_id: int) -> None:
+        if user_id in self.battle_queue:
+            self.battle_queue.remove(user_id)
+        await self._send(user_id, {"type": "battle_cancelled"})
+
+    async def _on_battle_progress(self, user_id: int, data: dict) -> None:
+        """내 점수 갱신 → 상대에게 실시간 전달."""
+        bid = self.user_battle.get(user_id)
+        room = self.battles.get(bid) if bid else None
+        if not room or room["finished"]:
+            return
+        p = room["players"].get(user_id)
+        if not p:
+            return
+        p["score"] = max(0, min(int(data.get("score") or 0), 500))
+        p["misses"] = max(0, min(int(data.get("misses") or 0), 10))
+
+        for other in room["players"]:
+            if other == user_id:
+                continue
+            await self._send(other, {
+                "type": "battle_opponent",
+                "score": p["score"],
+                "misses": p["misses"],
+            })
+
+        # 3번 틀리면 그 사람은 종료
+        if p["misses"] >= self.BATTLE_MAX_MISSES:
+            p["done"] = True
+            if all(x["done"] for x in room["players"].values()):
+                await self._finish_battle(bid, "완료")
+
+    async def _on_battle_done(self, user_id: int, data: dict) -> None:
+        bid = self.user_battle.get(user_id)
+        room = self.battles.get(bid) if bid else None
+        if not room or room["finished"]:
+            return
+        p = room["players"].get(user_id)
+        if not p:
+            return
+        p["score"] = max(0, min(int(data.get("score") or 0), 500))
+        p["misses"] = max(0, min(int(data.get("misses") or 0), 10))
+        p["done"] = True
+        if all(x["done"] for x in room["players"].values()):
+            await self._finish_battle(bid, "완료")
+
+    async def _battle_timer(self, battle_id: str) -> None:
+        await asyncio.sleep(self.BATTLE_SECONDS + 2)
+        room = self.battles.get(battle_id)
+        if room and not room["finished"]:
+            await self._finish_battle(battle_id, "시간 종료")
+
+    async def _finish_battle(self, battle_id: str, reason: str) -> None:
+        room = self.battles.get(battle_id)
+        if not room or room["finished"]:
+            return
+        room["finished"] = True
+
+        ids = list(room["players"].keys())
+        if len(ids) != 2:
+            self._cleanup_battle(battle_id)
+            return
+        a, b = ids
+        pa, pb = room["players"][a], room["players"][b]
+
+        if pa["score"] > pb["score"]:
+            res = {a: "win", b: "loss"}
+        elif pb["score"] > pa["score"]:
+            res = {a: "loss", b: "win"}
+        else:
+            res = {a: "draw", b: "draw"}
+
+        # DB 기록
+        try:
+            from .database import SessionLocal
+            from .models import BattleSession, User as UserModel
+            db = SessionLocal()
+            try:
+                for uid, other in ((a, b), (b, a)):
+                    me, opp = room["players"][uid], room["players"][other]
+                    db.add(BattleSession(
+                        user_id=uid, opponent_id=other, opponent_name=opp["name"][:40],
+                        score=me["score"], opponent_score=opp["score"],
+                        result=res[uid], seconds=self.BATTLE_SECONDS,
+                    ))
+                    u = db.query(UserModel).filter(UserModel.id == uid).first()
+                    if u:
+                        if res[uid] == "win":
+                            u.battle_wins = (u.battle_wins or 0) + 1
+                        elif res[uid] == "loss":
+                            u.battle_losses = (u.battle_losses or 0) + 1
+                db.commit()
+            finally:
+                db.close()
+        except Exception:
+            pass
+
+        for uid, other in ((a, b), (b, a)):
+            me, opp = room["players"][uid], room["players"][other]
+            await self._send(uid, {
+                "type": "battle_over",
+                "result": res[uid],
+                "reason": reason,
+                "myScore": me["score"],
+                "opponentScore": opp["score"],
+                "opponentName": opp["name"],
+            })
+
+        self._cleanup_battle(battle_id)
+
+    def _cleanup_battle(self, battle_id: str) -> None:
+        room = self.battles.pop(battle_id, None)
+        if not room:
+            return
+        for uid in room["players"]:
+            self.user_battle.pop(uid, None)
 
 
 server = GameServer()

@@ -2,28 +2,36 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="kiwi-version" content="20" />
+  <meta name="kiwi-version" content="28" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="무료 온라인 체스 플랫폼. 봇 대국, 퍼즐, 오프닝 학습, 게임 분석, 통찰까지." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="무료 온라인 체스 플랫폼. 봇 대국, 퍼즐, 오프닝 학습, 게임 분석, 통찰까지." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
   <title>Kiwi Karlsen.com — 온라인 체스</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/css/style.css?v=20" />
-  <script src="/js/theme.js?v=20"></script>
-  <script src="/js/version-check.js?v=20"></script>
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
 </head>
 <body>
   <header class="topbar">
     <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
     <div class="brand">Kiwi Karlsen<small>.com</small></div>
     <nav>
-      <a href="/index.html?v=20" class="active">로비</a>
-      <a href="/play.html?v=20">봇 대국</a>
-      <a href="/puzzles.html?v=20">퍼즐</a>
-      <a href="/openings.html?v=20">오프닝</a>
-      <a href="/analysis.html?v=20">분석</a>
+      <a href="/index.html?v=28" class="active">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28">퍼즐</a>
+      <a href="/vision.html?v=22">시각</a>
+      <a href="/openings.html?v=28">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=24">통찰</a>
+      <a href="/clubs.html?v=23">클럽</a>
       <a href="/players.html?v=20">사용자</a>
-      <a href="/profile.html?v=20">프로필</a>
-      <a href="/admin.html?v=20" id="adminNavLink" class="hidden">관리자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
       <span id="userChip" class="user-chip hidden"></span>
       <a href="#" id="logoutBtn" class="hidden">로그아웃</a>
     </nav>
@@ -38,12 +46,25 @@
       <label>사용자 이름</label>
       <input type="text" id="loginUsername" placeholder="2~20자, 영문/숫자/_-." maxlength="20" autocomplete="username" />
       <label>비밀번호</label>
-      <input type="password" id="loginPassword" placeholder="6자 이상" maxlength="128" autocomplete="current-password" />
+      <input type="password" id="loginPassword" placeholder="8자 이상, 문자 2종류 이상" maxlength="128" autocomplete="current-password" />
       <button class="btn" id="loginBtn" style="width:100%;margin-top:8px;">로그인</button>
       <p class="center muted" style="margin-top:12px;">
         <span id="authSwitchText">계정이 없으신가요?</span>
         <a href="#" id="authSwitch" style="font-weight:700;">회원가입</a>
       </p>
+      <label id="totpWrap" class="hidden">
+        2단계 인증 코드
+        <input type="text" id="loginTotp" maxlength="16" inputmode="numeric"
+               placeholder="인증 앱의 6자리 코드 또는 백업 코드" autocomplete="one-time-code" />
+      </label>
+      <label id="termsWrap" class="hidden" style="display:flex;flex-direction:row;align-items:center;gap:8px;font-weight:500;">
+        <input type="checkbox" id="acceptTerms" style="width:auto;margin:0;" />
+        <span><a href="/terms.html?v=26" target="_blank">이용약관</a> 및
+          <a href="/terms.html?v=26" target="_blank">개인정보 처리방침</a>에 동의합니다.</span>
+      </label>
+      <!-- 허니팟: 사람에게는 보이지 않는 필드. 봇이 채우면 가입이 거부된다. -->
+      <input type="text" id="hp_website" name="website" tabindex="-1" autocomplete="off"
+             style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;" aria-hidden="true" />
       <p id="loginError" class="muted" style="color:var(--danger);min-height:18px;"></p>
     </section>
 
@@ -89,8 +110,8 @@
           <h2 style="margin-top:18px;">🏆 리더보드</h2>
           <div id="leaderboard"><p class="muted">불러오는 중…</p></div>
           <h2 style="margin-top:18px;">바로가기</h2>
-          <a class="btn brown stack-btn" href="/play.html?v=20">🤖 봇과 대국</a>
-          <a class="btn secondary stack-btn" href="/puzzles.html?v=20">🧩 퍼즐 풀기</a>
+          <a class="btn brown stack-btn" href="/play.html?v=28">🤖 봇과 대국</a>
+          <a class="btn secondary stack-btn" href="/puzzles.html?v=28">🧩 퍼즐 풀기</a>
         </div>
       </div>
     </section>
@@ -169,7 +190,7 @@
 
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스 · v20</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 키위새와 함께하는 체스 · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
 
   <!-- 라이브러리 -->
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
@@ -177,14 +198,14 @@
   <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
   <!-- 앱 스크립트 -->
-  <script src="/js/api.js?v=20"></script>
-  <script src="/js/settings.js?v=20"></script>
-  <script src="/js/notifications.js?v=20"></script>
-  <script src="/js/sounds.js?v=20"></script>
-  <script src="/js/socket.js?v=20"></script>
-  <script src="/js/tapmove.js?v=20"></script>
-  <script src="/js/online-game.js?v=20"></script>
-  <script src="/js/lobby.js?v=20"></script>
-  <script src="/js/friends-ui.js?v=20"></script>
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/sounds.js?v=28"></script>
+  <script src="/js/socket.js?v=28"></script>
+  <script src="/js/tapmove.js?v=28"></script>
+  <script src="/js/online-game.js?v=28"></script>
+  <script src="/js/lobby.js?v=28"></script>
+  <script src="/js/friends-ui.js?v=28"></script>
 </body>
 </html>

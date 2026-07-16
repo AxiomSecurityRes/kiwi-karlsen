@@ -247,8 +247,20 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
-    "Permissions-Policy": "geolocation=(), microphone=(), camera=(), payment=()",
+    "Permissions-Policy": (
+        "geolocation=(), microphone=(), camera=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), accelerometer=(), midi=(), "
+        "interest-cohort=()"
+    ),
+    # HTTPS 강제 (2년, 서브도메인 포함). Render 는 HTTPS 를 제공한다.
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+    # 교차 출처 격리 — Spectre 류 사이드채널 및 창 조작 방어
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    # 구형 플러그인 정책 파일 차단
+    "X-Permitted-Cross-Domain-Policies": "none",
+    # 레거시 XSS 필터(구형 브라우저)
+    "X-XSS-Protection": "0",
 }
 
 
@@ -327,3 +339,50 @@ def store_sizes() -> dict:
         "activity": len(_activity),
         "suspicion": len(_suspicion),
     }
+
+
+# ---------------------------------------------------------------------------
+# 7) 가입 남용 방지 — IP 당 하루 가입 상한
+# ---------------------------------------------------------------------------
+SIGNUPS_PER_IP_PER_DAY = 3
+_signups: dict[str, deque] = defaultdict(deque)
+_DAY = 86400
+
+
+def signup_allowed(ip_hash: str) -> bool:
+    q = _signups[ip_hash]
+    cutoff = _now() - _DAY
+    while q and q[0] < cutoff:
+        q.popleft()
+    return len(q) < SIGNUPS_PER_IP_PER_DAY
+
+
+def record_signup(ip_hash: str) -> None:
+    _signups[ip_hash].append(_now())
+
+
+# ---------------------------------------------------------------------------
+# 8) WebSocket Origin 검사 — 교차 사이트 WS 하이재킹(CSWSH) 방어
+# ---------------------------------------------------------------------------
+def origin_allowed(origin: str, host: str, allowed: str = "") -> bool:
+    """WS 연결의 Origin 이 우리 사이트인지 확인.
+
+    브라우저는 WebSocket 에 동일 출처 정책을 강제하지 않는다.
+    Origin 을 검사하지 않으면 악성 사이트가 사용자의 세션으로 WS 를 열 수 있다.
+    """
+    if not origin:
+        return True   # 비브라우저 클라이언트(테스트 등)는 통과
+    o = origin.lower().rstrip("/")
+    # 명시적으로 허용된 출처
+    for a in [x.strip().lower().rstrip("/") for x in (allowed or "").split(",") if x.strip()]:
+        if o == a:
+            return True
+    # 같은 호스트면 허용
+    if host:
+        h = host.lower().split(":")[0]
+        if o.endswith("://" + h) or o.endswith("://" + h + ":443") or ("://" + h + ":") in o:
+            return True
+    # 로컬 개발
+    if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", o):
+        return True
+    return False

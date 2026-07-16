@@ -2,71 +2,143 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="kiwi-version" content="20" />
+  <meta name="kiwi-version" content="28" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>오프닝 탐색기 — Kiwi Karlsen.com</title>
+  <meta name="description" content="3,800여 종 오프닝 탐색기와 단계별 오프닝 학습 커리큘럼." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="3,800여 종 오프닝 탐색기와 단계별 오프닝 학습 커리큘럼." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
+  <title>오프닝 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/css/style.css?v=20" />
-  <script src="/js/theme.js?v=20"></script>
-  <script src="/js/version-check.js?v=20"></script>
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
 </head>
 <body>
   <header class="topbar">
     <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
     <div class="brand">Kiwi Karlsen<small>.com</small></div>
     <nav>
-      <a href="/index.html?v=20">로비</a>
-      <a href="/play.html?v=20">봇 대국</a>
-      <a href="/puzzles.html?v=20">퍼즐</a>
-      <a href="/openings.html?v=20" class="active">오프닝</a>
-      <a href="/analysis.html?v=20">분석</a>
-      <a href="/players.html?v=20">사용자</a>
-      <a href="/profile.html?v=20">프로필</a>
-      <a href="/admin.html?v=20" id="adminNavLink" class="hidden">관리자</a>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28">퍼즐</a>
+      <a href="/vision.html?v=22">시각</a>
+      <a href="/openings.html?v=28" class="active">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=24">통찰</a>
+      <a href="/clubs.html?v=23">클럽</a>
+      <a href="/players.html?v=22">사용자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
     </nav>
   </header>
 
   <main class="container">
-    <div class="grid two">
-      <div class="card">
-        <div class="board-wrap"><div id="opening-board"></div></div>
-        <div class="center" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
-          <button class="btn small secondary" id="opBack">◀ 무르기</button>
-          <button class="btn small secondary" id="opFlip">🔄 뒤집기</button>
-          <button class="btn small danger" id="opReset">🗑 처음부터</button>
-        </div>
-        <div class="status" id="opMoves">아직 수가 없습니다. 오른쪽에서 정석 수를 고르거나 기물을 직접 움직이세요.</div>
-      </div>
-
-      <div class="card">
-        <h2>📖 오프닝 탐색기</h2>
-        <div id="opName" class="op-name">시작 국면</div>
-        <p class="muted" id="opEco"></p>
-
-        <h3 style="margin-top:14px;">이어지는 정석 수</h3>
-        <div id="opNext"><p class="muted">불러오는 중…</p></div>
-
-        <h3 style="margin-top:16px;">오프닝 검색</h3>
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="opSearch" placeholder="예: 시실리안, 루이 로페즈, C60" style="margin:0;" />
-          <button class="btn small" id="opSearchBtn">검색</button>
-        </div>
-        <div id="opResults" style="margin-top:8px;"></div>
-      </div>
+    <div class="admin-tabs" id="opTabs">
+      <button class="tab-btn active" data-tab="tabExplore">🔭 탐색기</button>
+      <button class="tab-btn" data-tab="tabLearn">🎓 배우기</button>
     </div>
+
+    <!-- ================= 탐색기 ================= -->
+    <section id="tabExplore" class="tab-pane">
+      <div class="grid two">
+        <div class="card">
+          <div class="board-wrap"><div id="opening-board"></div></div>
+          <div class="center" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn small secondary" id="opBack">◀ 무르기</button>
+            <button class="btn small secondary" id="opFlip">🔄 뒤집기</button>
+            <button class="btn small danger" id="opReset">🗑 처음부터</button>
+          </div>
+          <div class="status" id="opMoves">기물을 움직이거나 오른쪽에서 수를 고르세요.</div>
+          <div id="opName" class="op-name">시작 국면</div>
+          <p class="muted" id="opEco"></p>
+        </div>
+
+        <div class="card">
+          <h2>🔭 오프닝 탐색기</h2>
+
+          <div class="exp-filters">
+            <label>데이터 소스</label>
+            <select id="expSource" style="width:100%;">
+              <option value="lichess">Lichess (수백만 판)</option>
+              <option value="local">이 사이트의 게임</option>
+            </select>
+
+            <div id="expOnlineOnly">
+              <label>레이팅 범위 (여러 개 선택 가능)</label>
+              <div class="chip-row" id="expRatings"></div>
+
+              <label style="margin-top:8px;">시간 제어</label>
+              <div class="chip-row" id="expSpeeds"></div>
+            </div>
+          </div>
+
+          <div id="expSummary" class="exp-summary"></div>
+          <div id="expMoves"><p class="muted">불러오는 중…</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 배우기 ================= -->
+    <section id="tabLearn" class="tab-pane hidden">
+      <div class="card" id="learnHome">
+        <h2>🎓 오프닝 배우기</h2>
+        <p class="muted">수순을 익힌 뒤, 외워서 직접 두어 봅니다. 90점 이상이면 마스터!</p>
+        <div id="learnStats" class="learn-stats"></div>
+        <div id="learnUnits"><p class="muted">불러오는 중…</p></div>
+      </div>
+
+      <div class="card hidden" id="learnPlay">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h2 id="lpTitle" style="margin:0;flex:1;">오프닝</h2>
+          <button class="btn small secondary" id="lpBack">← 목록</button>
+        </div>
+        <p class="muted" id="lpEco"></p>
+
+        <div class="grid two" style="margin-top:12px;">
+          <div>
+            <div class="board-wrap"><div id="learn-board"></div></div>
+            <div class="status" id="lpStatus">학습 모드 — 수순을 따라가 보세요.</div>
+          </div>
+          <div>
+            <div class="learn-modes">
+              <button class="btn small active" id="lpStudyBtn">📖 학습</button>
+              <button class="btn small secondary" id="lpQuizBtn">✍️ 퀴즈</button>
+            </div>
+            <div id="lpMoveList" class="movelist" style="max-height:220px;"></div>
+            <div id="lpControls" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+              <button class="btn small secondary" id="lpPrev">◀</button>
+              <button class="btn small secondary" id="lpNext">▶</button>
+              <button class="btn small" id="lpAuto">▶▶ 자동 재생</button>
+            </div>
+            <div id="lpQuizPanel" class="hidden">
+              <div class="quiz-score">
+                <span>정답 <b id="lpCorrect">0</b></span>
+                <span>오답 <b id="lpWrong">0</b></span>
+                <span>진행 <b id="lpProgress">0/0</b></span>
+              </div>
+              <p class="muted" id="lpHint"></p>
+              <button class="btn small secondary" id="lpRetry">🔄 다시</button>
+            </div>
+            <div id="lpResult"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 오프닝 탐색기 · v20</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 오프닝 · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
 
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
   <script src="/assets/vendor/chess-0.10.3.min.js"></script>
   <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
-  <script src="/js/api.js?v=20"></script>
-  <script src="/js/settings.js?v=20"></script>
-  <script src="/js/notifications.js?v=20"></script>
-  <script src="/js/sounds.js?v=20"></script>
-  <script src="/js/tapmove.js?v=20"></script>
-  <script src="/js/openings.js?v=20"></script>
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/sounds.js?v=28"></script>
+  <script src="/js/tapmove.js?v=28"></script>
+  <script src="/js/openings.js?v=28"></script>
 </body>
 </html>

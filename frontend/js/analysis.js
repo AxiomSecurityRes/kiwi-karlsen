@@ -14,6 +14,11 @@
   let reviewing = false;
   let startFen = new Chess().fen();
   let lastDepth = 0;
+  let reviewColor = null;   // 최근 게임 리뷰 시 내 색
+  let reviewGameId = null;
+  let moveData = [];        // 수별 상세 데이터 (통찰용)
+  let reviewStats = null;
+  let reviewCounts = null;
 
   // 11단계 분류 (chess.com / 나무위키 표기)
   const CLASS_INFO = {
@@ -301,89 +306,160 @@
   }
 
   async function fullReview() {
-    if (!mainline.length || reviewing) return;
+    if (reviewing || !mainline.length) return;
     reviewing = true;
-    $("reviewLoading").classList.add("show");
     $("btnFullReview").disabled = true;
-    const t0 = Date.now();
+    $("reviewLoading").classList.add("show");
+    $("reviewProgress").textContent = "0%";
 
-    // 1) 국면 목록: 종료국면은 즉시 계산, 나머지만 엔진 병렬 평가
     const N = mainline.length;
-    evals = new Array(N + 1).fill(null);
-    const idxToEval = [];
-    const fensToEval = [];
-    for (let i = 0; i <= N; i++) {
-      const t = terminalEval(fenAtPly(i));
-      if (t) evals[i] = t;
-      else { idxToEval.push(i); fensToEval.push(fenAtPly(i)); }
-    }
-    const engineResults = await Engine.reviewEvaluate(fensToEval, (done, total) => {
-      const el = Date.now() - t0;
-      $("reviewProgress").textContent = `분석 중… ${done}/${total} (${(done / (el / 1000)).toFixed(1)}수/초)`;
-    });
-    engineResults.forEach((ev, k) => {
-      let cp;
-      if (ev && ev.mate != null) cp = ev.mate > 0 ? MATE - ev.mate * 100 : -MATE - ev.mate * 100;
-      else cp = (ev && ev.score != null) ? ev.score : 0;
-      evals[idxToEval[k]] = { cp, best: ev && ev.best, terminal: false, depth: (ev && ev.depth) || 0 };
+    const fens = [];
+    for (let i = 0; i <= N; i++) fens.push(fenAtPly(i));
+
+    // 1) 엔진 정밀 분석 (MultiPV 2 — 1·2순위 수와 평가)
+    const raw = await Engine.reviewEvaluateMulti(fens, (done, total) => {
+      $("reviewProgress").textContent = Math.round((done / total) * 100) + "%";
     });
 
-    // 2) 이론(정석) 판정 — 오프닝 DB 기준
+    // 2) 이론(정석) 판정 — 오프닝 DB 3,800여 종
     let bookFlags = new Array(N).fill(false);
     try {
-      const sans = mainline.map((m) => m.san);
-      const r = await API.openingsBook(sans);
+      const r = await API.openingsBook(mainline.map((m) => m.san));
       if (r && Array.isArray(r.book)) bookFlags = r.book;
-    } catch (e) { /* 서버 조회 실패 시 이론 판정 없이 진행 */ }
+    } catch (e) { /* 서버 조회 실패 시 이론 판정 생략 */ }
 
-    // 3) 승률 및 분류
-    winPcts = evals.map((e) => cpToWinPct(e.cp));
+    // 3) 수별 분석
+    const R = window.KiwiReview;
+    evals = raw.map((e) => ({
+      cp: e.cp,
+      best: e.best,
+      depth: e.depth,
+      terminal: false,
+    }));
+    winPcts = evals.map((e) => R.winPercent(e.cp));
     classifications = new Array(N).fill(null);
-    const counts = { white: {}, black: {} };
-    const drops = { white: [], black: [] };
+    moveData = [];
+
+    const accByColor = { white: [], black: [] };
+    const winsByColor = { white: [], black: [] };
+    const lossByColor = { white: [], black: [] };
+    const counts = {
+      white: emptyCounts(), black: emptyCounts(),
+    };
+    const tactics = {
+      white: { total: 0, found: 0 }, black: { total: 0, found: 0 },
+    };
+
     for (let i = 0; i < N; i++) {
+      const before = raw[i];
+      const after = raw[i + 1];
       const moverWhite = (i % 2 === 0);
-      const beforeWin = moverWhite ? winPcts[i] : 100 - winPcts[i];
-      const afterWin = moverWhite ? winPcts[i + 1] : 100 - winPcts[i + 1];
-      const drop = Math.max(0, beforeWin - afterWin);
-      // 절대 센티폰 손실 (mover 관점, 메이트 왜곡 방지 위해 ±2000 로 제한)
-      const clamp = (x) => Math.max(-2000, Math.min(2000, x));
-      const beforeCpMover = clamp(moverWhite ? evals[i].cp : -evals[i].cp);
-      const afterCpMover = clamp(moverWhite ? evals[i + 1].cp : -evals[i + 1].cp);
-      const cpDrop = Math.max(0, beforeCpMover - afterCpMover);
-      const bestUci = evals[i].best;
-      const isBest = !!(bestUci && mainline[i].uci.slice(0, 4) === bestUci.slice(0, 4));
-      const gaveMate = !!(evals[i + 1].terminal && Math.abs(evals[i + 1].cp) >= MATE);
-      // 두기 전 mover가 강제 메이트를 갖고 있었나 (mover 관점)
-      const preCpMover = moverWhite ? evals[i].cp : -evals[i].cp;
-      const postCpMover = moverWhite ? evals[i + 1].cp : -evals[i + 1].cp;
-      const hadMate = preCpMover >= MATE - 5000;
-      // 이 수를 둔 뒤에도 여전히 강제 메이트가 남아 있는가 (메이트 수순 진행 중)
-      const stillMate = postCpMover >= MATE - 5000;
-      let legalCount = 0;
-      try { legalCount = new Chess(fenAtPly(i)).moves().length; } catch (e) { legalCount = 2; }
-      const cls = classifyMove({
-        i, drop, cpDrop, isBest, beforeWin, afterWin,
-        moverColor: moverWhite ? "w" : "b",
-        gaveMate, hadMate, stillMate, legalCount,
+      const color = moverWhite ? "white" : "black";
+      const mv = mainline[i];
+
+      // mover 관점 승률
+      const winBefore = R.winPercent(before.bestCpStm != null ? before.bestCpStm : (moverWhite ? before.cp : -before.cp));
+      const afterStm = after.bestCpStm != null ? after.bestCpStm : (moverWhite ? -after.cp : after.cp);
+      const winAfter = 100 - R.winPercent(afterStm);   // 상대 차례 관점 → mover 관점
+
+      const bestWin = winBefore;
+      const secondWin = before.secondCpStm != null ? R.winPercent(before.secondCpStm) : null;
+
+      const playedUci = mv.from + mv.to + (mv.promotion || "");
+      const isBest = before.best === playedUci;
+
+      let legalCount = 2;
+      try { legalCount = new Chess(fens[i]).moves().length; } catch (e) {}
+
+      const sacrifice = R.isSacrifice(Chess, fens[i], mv);
+      const gaveMate = (() => {
+        try { return new Chess(fens[i + 1]).in_checkmate(); } catch (e) { return false; }
+      })();
+      const hadMate = before.mateStm != null && before.mateStm > 0;
+      const stillMate = after.mateStm != null && after.mateStm < 0;
+
+      const cls = R.classify({
+        winBefore, winAfter, isBest, bestWin, secondWin,
         isBook: !!bookFlags[i],
+        legalCount, hadMate, gaveMate, stillMate, sacrifice,
       });
       classifications[i] = cls;
-      const side = moverWhite ? "white" : "black";
-      counts[side][cls] = (counts[side][cls] || 0) + 1;
-      drops[side].push(drop);
+
+      const acc = R.moveAccuracy(winBefore, winAfter);
+      const loss = Math.max(0, winBefore - winAfter);
+
+      // 게임 단계
+      let material = 62, inBook = !!bookFlags[i];
+      try { material = R.nonPawnMaterial(new Chess(fens[i])); } catch (e) {}
+      const phase = R.phaseOf(i, material, inBook);
+
+      // 전술 판별 — 결정적 국면에서 최선을 찾았는가
+      const tactical = R.isTacticalPosition(bestWin, secondWin);
+      if (tactical) {
+        tactics[color].total++;
+        if (isBest) tactics[color].found++;
+      }
+
+      counts[color][cls] = (counts[color][cls] || 0) + 1;
+      // 이론/강제는 정확도 평균에서 제외 (실력과 무관)
+      if (cls !== "book" && cls !== "forced") {
+        accByColor[color].push(acc);
+        winsByColor[color].push(winBefore);
+        lossByColor[color].push(loss);
+      }
+
+      moveData.push({
+        ply: i + 1,
+        moveNo: Math.floor(i / 2) + 1,
+        color,
+        san: mv.san,
+        uci: playedUci,
+        piece: mv.piece,
+        from: mv.from,
+        to: mv.to,
+        captured: mv.captured || null,
+        isCapture: !!mv.captured,
+        isCastle: mv.flags.indexOf("k") !== -1 || mv.flags.indexOf("q") !== -1,
+        castleSide: mv.flags.indexOf("k") !== -1 ? "king" : (mv.flags.indexOf("q") !== -1 ? "queen" : null),
+        isPromotion: !!mv.promotion,
+        isCheck: mv.san.indexOf("+") !== -1 || mv.san.indexOf("#") !== -1,
+        classification: cls,
+        accuracy: Math.round(acc * 10) / 10,
+        loss: Math.round(loss * 10) / 10,
+        cpBefore: before.cp,
+        cpAfter: after.cp,
+        winBefore: Math.round(winBefore * 10) / 10,
+        winAfter: Math.round(winAfter * 10) / 10,
+        phase,
+        isBook: !!bookFlags[i],
+        isBest,
+        isTactic: tactical,
+        tacticFound: tactical && isBest,
+        bestMove: before.best,
+        depth: before.depth,
+      });
     }
 
-    // 3) 정확도 & 예상 ELO
+    // 4) 게임 정확도 (Lichess 방식)
     const stats = {};
-    for (const side of ["white", "black"]) {
-      const ds = drops[side];
-      if (ds.length) {
-        const acc = ds.map(moveAccuracy).reduce((a, b) => a + b, 0) / ds.length;
-        const avgDrop = ds.reduce((a, b) => a + b, 0) / ds.length;
-        stats[side] = { accuracy: acc, estElo: estimateElo(avgDrop) };
-      } else stats[side] = { accuracy: 0, estElo: null };
-    }
+    ["white", "black"].forEach((c) => {
+      const accs = accByColor[c];
+      const acc = R.gameAccuracy(accs, winsByColor[c]);
+      const avgLoss = lossByColor[c].length
+        ? lossByColor[c].reduce((a, b) => a + b, 0) / lossByColor[c].length : 0;
+      stats[c] = {
+        accuracy: Math.round(acc * 10) / 10,
+        avgLoss: Math.round(avgLoss * 10) / 10,
+        estElo: R.estimateElo(acc, avgLoss),
+        moves: accs.length,
+        tacticsTotal: tactics[c].total,
+        tacticsFound: tactics[c].found,
+        tacticsPct: tactics[c].total
+          ? Math.round((tactics[c].found / tactics[c].total) * 100) : 0,
+      };
+    });
+    reviewStats = stats;
+    reviewCounts = counts;
 
     $("reviewLoading").classList.remove("show");
     $("btnFullReview").disabled = false;
@@ -391,26 +467,111 @@
     renderGraph();
     renderMoves();
     reviewing = false;
+
+    saveReviewToInsights(counts, stats);
+  }
+
+  function emptyCounts() {
+    const o = {};
+    window.KiwiReview.CLASSES.forEach((c) => { o[c] = 0; });
+    return o;
+  }
+
+  /** 리뷰 결과 + 수별 상세 데이터를 통찰에 저장 */
+  async function saveReviewToInsights(counts, stats) {
+    if (!API.getToken()) return;
+    try {
+      const color = reviewColor || "white";
+      const st = stats[color] || {};
+      await API.insightsSaveReview({
+        gameId: reviewGameId || null,
+        color,
+        accuracy: st.accuracy || 0,
+        estElo: st.estElo || 0,
+        avgLoss: st.avgLoss || 0,
+        counts: counts[color] || {},
+        tacticsTotal: st.tacticsTotal || 0,
+        tacticsFound: st.tacticsFound || 0,
+        moves: moveData.filter((m) => m.color === color),
+        opponentAccuracy: (stats[color === "white" ? "black" : "white"] || {}).accuracy || 0,
+      });
+    } catch (e) { /* 저장 실패는 조용히 무시 */ }
+  }
+
+  /** 내 색(백/흑)을 추정해 리뷰 결과를 서버에 저장 */
+  async function saveReviewToInsights(counts, stats, drops) {
+    if (!API.getToken()) return;
+    try {
+      const me = API.getUser();
+      // 최근 게임에서 불러온 리뷰면 내 색을 알 수 있다. 아니면 백 기준.
+      let color = reviewColor || "white";
+      const side = counts[color] || {};
+      const st = stats[color] || { accuracy: 0, estElo: 0 };
+      const ds = drops[color] || [];
+      const avgLoss = ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : 0;
+
+      await API.insightsSaveReview({
+        gameId: reviewGameId || null,
+        color,
+        accuracy: st.accuracy || 0,
+        estElo: st.estElo || 0,
+        avgLoss,
+        counts: {
+          brilliant: side.brilliant || 0, great: side.great || 0, best: side.best || 0,
+          excellent: side.excellent || 0, good: side.good || 0, book: side.book || 0,
+          forced: side.forced || 0, inaccuracy: side.inaccuracy || 0,
+          mistake: side.mistake || 0, missed: side.missed || 0, blunder: side.blunder || 0,
+        },
+      });
+    } catch (e) { /* 저장 실패는 조용히 무시 */ }
   }
 
   function renderSummary(counts, stats) {
-    const order = ["brilliant", "great", "best", "excellent", "good", "book", "forced", "inaccuracy", "mistake", "missed", "blunder"];
-    function row(side, label) {
-      const st = stats[side];
-      let head = `<b>${label}</b> — 정확도 <b>${st.accuracy.toFixed(1)}%</b>` +
-        (st.estElo ? ` · 예상 레이팅 <b>≈${st.estElo}</b>` : "");
-      let cells = order.filter((k) => counts[side][k]).map((k) => {
-        const info = CLASS_INFO[k];
-        return `<span style="color:${info.color};font-weight:700;">${info.icon} ${info.ko} ${counts[side][k]}</span>`;
-      }).join(" · ");
-      if (!cells) cells = '<span class="muted">기록 없음</span>';
-      return `<div class="sum-row">${head}<br>${cells}</div>`;
-    }
-    $("reviewSummary").innerHTML =
-      `<div class="sum-title">📊 게임 리뷰 결과</div>` +
-      row("white", "⚪ 백") + row("black", "⚫ 흑") +
-      `<div class="muted" style="margin-top:6px;font-size:0.8rem;">그래프/수를 클릭하면 해당 국면으로 이동합니다. 예상 레이팅은 이 한 판 기준의 근사치입니다.</div>`;
-    $("reviewSummary").classList.remove("hidden");
+    const R = window.KiwiReview;
+    const rows = R.CLASSES.map((c) => {
+      const w = counts.white[c] || 0;
+      const b = counts.black[c] || 0;
+      if (!w && !b) return "";
+      return `<div class="sum-row">
+        <span class="rv-icon rv-${c}">${R.CLASS_ICON[c]}</span>
+        <span class="rv-name">${R.CLASS_KO[c]}</span>
+        <span class="rv-w">${w}</span>
+        <span class="rv-b">${b}</span>
+      </div>`;
+    }).join("");
+
+    const sw = stats.white, sb = stats.black;
+    $("reviewSummary").innerHTML = `
+      <div class="review-summary">
+        <div class="sum-title">📊 게임 리뷰</div>
+        <div class="rv-head">
+          <span></span><span></span><span>⚪ 백</span><span>⚫ 흑</span>
+        </div>
+        <div class="sum-row rv-acc">
+          <span class="rv-icon">🎯</span>
+          <span class="rv-name">정확도</span>
+          <span class="rv-w"><b>${sw.accuracy}%</b></span>
+          <span class="rv-b"><b>${sb.accuracy}%</b></span>
+        </div>
+        <div class="sum-row">
+          <span class="rv-icon">📈</span>
+          <span class="rv-name">예상 레이팅</span>
+          <span class="rv-w">${sw.estElo}</span>
+          <span class="rv-b">${sb.estElo}</span>
+        </div>
+        <div class="sum-row">
+          <span class="rv-icon">⚡</span>
+          <span class="rv-name">전술 포착</span>
+          <span class="rv-w">${sw.tacticsFound}/${sw.tacticsTotal} (${sw.tacticsPct}%)</span>
+          <span class="rv-b">${sb.tacticsFound}/${sb.tacticsTotal} (${sb.tacticsPct}%)</span>
+        </div>
+        <div class="rv-divider"></div>
+        ${rows}
+        <p class="muted" style="margin-top:8px;font-size:0.75rem;">
+          평균 승률 손실: 백 ${sw.avgLoss}% · 흑 ${sb.avgLoss}% ·
+          분석 깊이 depth ${(evals[0] && evals[0].depth) || "-"}
+        </p>
+      </div>`;
   }
 
   // ---------- 평가 그래프 (클릭 이동) ----------
@@ -487,8 +648,12 @@
         btn.className = "btn small"; btn.textContent = "리뷰";
         btn.onclick = async () => {
           const detail = await API.gameDetail(g.id);
-          if (detail && detail.pgn) { if (loadFromPgn(detail.pgn)) fullReview(); }
-          else $("bestLine").textContent = "이 게임에는 기보(PGN)가 없습니다.";
+          if (detail && detail.pgn) {
+            const me = API.getUser();
+            reviewColor = (me && detail.whiteId === me.id) ? "white" : "black";
+            reviewGameId = g.id;
+            if (loadFromPgn(detail.pgn)) fullReview();
+          } else $("bestLine").textContent = "이 게임에는 기보(PGN)가 없습니다.";
         };
         row.appendChild(btn);
         box.appendChild(row);
@@ -548,6 +713,25 @@
       em.classList.add("engine-warn");
     }
     $("evalText").textContent = "기물을 움직여 분석을 시작하세요.";
+    // 클럽 보드에서 공유한 국면(FEN) 열기
+    let storedFen = null;
+    try { storedFen = localStorage.getItem("kiwi_review_fen"); } catch (e) {}
+    if (storedFen) {
+      try { localStorage.removeItem("kiwi_review_fen"); } catch (e) {}
+      try {
+        game = new Chess(storedFen);
+        startFen = storedFen;
+        mainline = [];
+        ply = 0;
+        board.position(storedFen);
+        renderMoves();
+        evalCurrent();
+        $("bestLine").textContent = "클럽에서 공유한 국면을 불러왔습니다.";
+        loadRecentGames();
+        return;
+      } catch (e) { /* 잘못된 FEN 이면 무시 */ }
+    }
+
     let stored = null;
     try { stored = localStorage.getItem("kiwi_review_pgn"); } catch (e) {}
     if (stored) {

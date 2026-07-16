@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="kiwi-version" content="28" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="레이팅 추이, 오프닝 성과, 정확도 등 내 체스를 데이터로 분석." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="레이팅 추이, 오프닝 성과, 정확도 등 내 체스를 데이터로 분석." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
+  <title>통찰 — Kiwi Karlsen.com</title>
+  <link rel="icon" href="/assets/img/kiwi-logo.svg" />
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
+</head>
+<body>
+  <header class="topbar">
+    <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
+    <div class="brand">Kiwi Karlsen<small>.com</small></div>
+    <nav>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28">퍼즐</a>
+      <a href="/vision.html?v=25">시각</a>
+      <a href="/openings.html?v=28">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=25" class="active">통찰</a>
+      <a href="/clubs.html?v=25">클럽</a>
+      <a href="/players.html?v=25">사용자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="card" id="insLogin">
+      <h2>📊 통찰</h2>
+      <p class="muted">로그인하면 내 체스를 데이터로 분석해 드립니다. <a href="/index.html?v=28">로비로</a></p>
+    </div>
+
+    <div id="insBody" class="hidden">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <h2 style="margin:0;flex:1;">📊 통찰</h2>
+          <select id="insRange" style="width:auto;margin:0;">
+            <option value="0">전체 기간</option>
+            <option value="7">최근 7일</option>
+            <option value="30">최근 30일</option>
+            <option value="90">최근 90일</option>
+            <option value="365">최근 1년</option>
+          </select>
+        </div>
+        <p class="muted" id="insSummary"></p>
+        <div class="grid" id="insKpi" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px;"></div>
+      </div>
+
+      <!-- 레이팅 추이 -->
+      <div class="card">
+        <h2>📈 레이팅 추이</h2>
+        <div id="insRating"></div>
+        <p class="muted" id="insRatingNote"></p>
+      </div>
+
+      <div class="grid two">
+        <!-- 색깔별 -->
+        <div class="card">
+          <h2>⚪⚫ 색깔별 성적</h2>
+          <div id="insColor"></div>
+        </div>
+
+        <!-- 상대 실력대별 -->
+        <div class="card">
+          <h2>🎯 상대 실력대별</h2>
+          <div id="insOpponent"></div>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <!-- 시간 제어별 -->
+        <div class="card">
+          <h2>⏱ 시간 제어별</h2>
+          <div id="insTC"></div>
+        </div>
+
+        <!-- 종료 유형 -->
+        <div class="card">
+          <h2>🏁 종료 유형</h2>
+          <div id="insTerm"></div>
+        </div>
+      </div>
+
+      <!-- 오프닝 성과 -->
+      <div class="card">
+        <h2>📖 오프닝 성과</h2>
+        <div id="insOpBest" class="ins-highlight"></div>
+        <h3 style="margin-top:12px;">백으로 둘 때</h3>
+        <div id="insOpWhite"></div>
+        <h3 style="margin-top:12px;">흑으로 둘 때</h3>
+        <div id="insOpBlack"></div>
+      </div>
+
+      <div class="grid two">
+        <!-- 정확도 추이 -->
+        <div class="card">
+          <h2>🎯 정확도 추이</h2>
+          <div id="insAcc"></div>
+          <p class="muted" id="insAccNote"></p>
+        </div>
+
+        <!-- 수 분류 분포 -->
+        <div class="card">
+          <h2>🧠 수 분류 분포</h2>
+          <div id="insMoves"></div>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <!-- 게임 길이 -->
+        <div class="card">
+          <h2>📏 게임 길이</h2>
+          <div id="insLength"></div>
+        </div>
+
+        <!-- 연승/연패 -->
+        <div class="card">
+          <h2>🔥 연속 기록</h2>
+          <div id="insStreak"></div>
+        </div>
+      </div>
+
+      <!-- 활동 패턴 -->
+      <div class="card">
+        <h2>🗓 활동 패턴 <span class="muted" style="font-size:0.8rem;font-weight:400;">(요일 × 시간대)</span></h2>
+        <div id="insHeat"></div>
+      </div>
+
+      <!-- 훈련 현황 -->
+      <div class="card">
+        <h2>🏋️ 훈련 현황</h2>
+        <div class="grid" id="insTraining" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px;"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">🥝 Kiwi Karlsen.com — 통찰 · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
+
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/charts.js?v=28"></script>
+  <script src="/js/insights.js?v=28"></script>
+</body>
+</html>

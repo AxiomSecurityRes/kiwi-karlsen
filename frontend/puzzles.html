@@ -2,28 +2,36 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="kiwi-version" content="20" />
+  <meta name="kiwi-version" content="28" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="체스 퍼즐, 일일 퍼즐, 퍼즐 러시, 실시간 퍼즐 전투로 전술을 단련하세요." />
+  <meta property="og:title" content="Kiwi Karlsen — 온라인 체스" />
+  <meta property="og:description" content="체스 퍼즐, 일일 퍼즐, 퍼즐 러시, 실시간 퍼즐 전투로 전술을 단련하세요." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#7fb02f" />
   <title>퍼즐 — Kiwi Karlsen.com</title>
   <link rel="icon" href="/assets/img/kiwi-logo.svg" />
   <link rel="stylesheet" href="/assets/vendor/chessboard-1.0.0.min.css" />
-  <link rel="stylesheet" href="/css/style.css?v=20" />
-  <script src="/js/theme.js?v=20"></script>
-  <script src="/js/version-check.js?v=20"></script>
+  <link rel="stylesheet" href="/css/style.css?v=28" />
+  <script src="/js/theme.js?v=28"></script>
+  <script src="/js/version-check.js?v=28"></script>
 </head>
 <body>
   <header class="topbar">
     <img src="/assets/img/kiwi-logo.svg" alt="Kiwi" />
     <div class="brand">Kiwi Karlsen<small>.com</small></div>
     <nav>
-      <a href="/index.html?v=20">로비</a>
-      <a href="/play.html?v=20">봇 대국</a>
-      <a href="/puzzles.html?v=20" class="active">퍼즐</a>
-      <a href="/openings.html?v=20">오프닝</a>
-      <a href="/analysis.html?v=20">분석</a>
+      <a href="/index.html?v=28">로비</a>
+      <a href="/play.html?v=28">봇 대국</a>
+      <a href="/puzzles.html?v=28" class="active">퍼즐</a>
+      <a href="/vision.html?v=22">시각</a>
+      <a href="/openings.html?v=28">오프닝</a>
+      <a href="/analysis.html?v=28">분석</a>
+      <a href="/insights.html?v=24">통찰</a>
+      <a href="/clubs.html?v=23">클럽</a>
       <a href="/players.html?v=20">사용자</a>
-      <a href="/profile.html?v=20">프로필</a>
-      <a href="/admin.html?v=20" id="adminNavLink" class="hidden">관리자</a>
+      <a href="/profile.html?v=28">프로필</a>
+      <a href="/admin.html?v=28" id="adminNavLink" class="hidden">관리자</a>
     </nav>
   </header>
 
@@ -32,6 +40,7 @@
       <button class="tab-btn active" data-mode="train">🧩 훈련</button>
       <button class="tab-btn" data-mode="daily">📅 일일 퍼즐</button>
       <button class="tab-btn" data-mode="rush">⚡ 퍼즐 러시</button>
+      <button class="tab-btn" data-mode="battle">⚔️ 퍼즐 전투</button>
     </div>
 
     <!-- 일일 퍼즐 안내 -->
@@ -40,6 +49,48 @@
       <p class="muted">모든 사용자가 같은 문제를 풉니다. 하루에 한 번만 기록됩니다.</p>
       <div id="dailyStatus"></div>
       <button class="btn" id="dailyStart">오늘의 퍼즐 풀기</button>
+    </div>
+
+    <!-- 퍼즐 전투 -->
+    <div class="card hidden" id="battleCard">
+      <h2>⚔️ 퍼즐 전투</h2>
+      <p class="muted">다른 사용자와 <b>똑같은 퍼즐 세트</b>로 3분간 실시간 대결합니다. 3번 틀리면 종료!</p>
+
+      <div id="battleIdle">
+        <button class="btn" id="battleFind">🔍 상대 찾기</button>
+        <span class="muted" id="battleNote"></span>
+      </div>
+
+      <div id="battleWaiting" class="hidden">
+        <div class="loading show"><div class="kiwi-spinner"></div>
+          <p class="muted">상대를 찾는 중…</p>
+        </div>
+        <button class="btn secondary" id="battleCancel">취소</button>
+      </div>
+
+      <div id="battleLive" class="hidden">
+        <div class="battle-hud">
+          <div class="bh-side">
+            <div class="bh-name" id="bhMe">나</div>
+            <div class="bh-score" id="bhMyScore">0</div>
+            <div class="bh-miss" id="bhMyMiss">❌ 0/3</div>
+          </div>
+          <div class="bh-mid">
+            <div class="bh-time" id="bhTime">3:00</div>
+            <div class="muted">VS</div>
+          </div>
+          <div class="bh-side">
+            <div class="bh-name" id="bhOpp">상대</div>
+            <div class="bh-score" id="bhOppScore">0</div>
+            <div class="bh-miss" id="bhOppMiss">❌ 0/3</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="battleResult"></div>
+
+      <h3 style="margin-top:14px;">🏆 전투 순위</h3>
+      <div id="battleBoard"></div>
     </div>
 
     <!-- 러시 설정/결과 -->
@@ -117,17 +168,18 @@
     </div>
   </main>
 
-  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요! · v20</footer>
+  <footer class="footer">🥝 Kiwi Karlsen.com — 퍼즐로 전술을 단련하세요! · v25 · <a href="/guide.html?v=26">가이드</a> · <a href="/terms.html?v=26">약관·개인정보</a></footer>
 
   <script src="/assets/vendor/jquery-3.7.1.min.js"></script>
   <script src="/assets/vendor/chess-0.10.3.min.js"></script>
   <script src="/assets/vendor/chessboard-1.0.0.min.js"></script>
 
-  <script src="/js/api.js?v=20"></script>
-  <script src="/js/settings.js?v=20"></script>
-  <script src="/js/notifications.js?v=20"></script>
-  <script src="/js/sounds.js?v=20"></script>
-  <script src="/js/tapmove.js?v=20"></script>
-  <script src="/js/puzzles.js?v=20"></script>
+  <script src="/js/api.js?v=28"></script>
+  <script src="/js/settings.js?v=28"></script>
+  <script src="/js/notifications.js?v=28"></script>
+  <script src="/js/sounds.js?v=28"></script>
+  <script src="/js/socket.js?v=28"></script>
+  <script src="/js/tapmove.js?v=28"></script>
+  <script src="/js/puzzles.js?v=28"></script>
 </body>
 </html>
