@@ -81,8 +81,8 @@
   async function initEngine() {
     const ok = await Engine.init();
     $("engineNote").textContent = ok
-      ? "✅ 브라우저 Stockfish 엔진(WASM) 사용 중 — 가장 강력합니다."
-      : "ℹ️ 현재 백엔드/내장 엔진으로 동작합니다. (assets/engine/stockfish.js 추가 시 더 강해집니다)";
+      ? "✅ " + Engine.describe() + " 사용 중 — 가장 강력합니다."
+      : "ℹ️ 브라우저 Stockfish 로드 실패 — 백엔드/내장 엔진으로 동작합니다. 새로고침해 보세요.";
   }
   function renderBotGrid() {
     const grid = $("botGrid");

@@ -29,6 +29,7 @@ def _migrate_columns() -> None:
             "opponent_accuracy": "FLOAT DEFAULT 0",
             "result": "VARCHAR(6) DEFAULT ''",
             "end_phase": "VARCHAR(12) DEFAULT ''",
+            "game_shape": "VARCHAR(16) DEFAULT ''",
         },
         "games": {
             "minutes": "INTEGER DEFAULT 0",
@@ -36,8 +37,12 @@ def _migrate_columns() -> None:
             "ply_count": "INTEGER DEFAULT 0",
             "white_rating_after": "FLOAT DEFAULT 0",
             "black_rating_after": "FLOAT DEFAULT 0",
+            "source": "VARCHAR(12) DEFAULT 'site'",
+            "ext_id": "VARCHAR(80) DEFAULT ''",
         },
         "users": {
+            "chesscom_username": "VARCHAR(40) DEFAULT ''",
+            "chesscom_synced_at": "DATETIME",
             "first_name": "VARCHAR(40) DEFAULT ''",
             "last_name": "VARCHAR(40) DEFAULT ''",
             "location": "VARCHAR(80) DEFAULT ''",

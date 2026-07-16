@@ -211,6 +211,9 @@ def build(db: Session, user: User, days: int = 0) -> dict:
     avg_accuracy = round(sum(r.accuracy for r in reviews) / len(reviews), 1) if reviews else 0.0
     avg_est_elo = round(sum(r.est_elo for r in reviews) / len(reviews)) if reviews else 0
 
+    # ---- 10b. 세부 지표 (수별 상세 ReviewMove 집계) ----
+    detailed = _detailed_review_stats(db, uid, reviews)
+
     # ---- 11. 활동 패턴 (요일 × 시간대) ----
     heat = [[0] * 24 for _ in range(7)]   # 0=월 … 6=일
     for g in games:
@@ -263,6 +266,7 @@ def build(db: Session, user: User, days: int = 0) -> dict:
             "reviews": len(reviews),
         },
         "moveDistribution": move_dist,
+        "detailed": detailed,
         "activity": heat,
         "training": {
             "puzzleRating": round(user.puzzle_rating),
@@ -329,6 +333,7 @@ def save_review(db: Session, user: User, data: dict) -> GameReview:
         opponent_accuracy=max(0.0, min(float(data.get("opponentAccuracy") or 0), 100.0)),
         result=result,
         end_phase=end_phase[:12],
+        game_shape=str(data.get("gameShape") or "")[:16],
         brilliant=c("brilliant"), great=c("great"), best=c("best"),
         excellent=c("excellent"), good=c("good"), book=c("book"),
         forced=c("forced"), inaccuracy=c("inaccuracy"), mistake=c("mistake"),
@@ -366,3 +371,194 @@ def save_review(db: Session, user: User, data: dict) -> GameReview:
         ))
     db.commit()
     return r
+
+
+# ---------------------------------------------------------------------------
+# 세부 리뷰 지표 — 수별 상세(ReviewMove) + 리뷰 요약(GameReview) 집계
+# ---------------------------------------------------------------------------
+_PIECE_KO = {"p": "폰", "n": "나이트", "b": "비숍", "r": "룩", "q": "퀸", "k": "킹"}
+_PHASE_KO = {"opening": "오프닝", "middlegame": "미들게임", "endgame": "엔드게임"}
+_SHAPE_KO = {
+    "wire_to_wire": "시종 우세", "comeback": "역전", "collapse": "리드 상실",
+    "seesaw": "시소(엎치락뒤치락)", "even": "균형·접전", "crush": "압도", "crushed": "완패",
+}
+_RESULT_KO = {"win": "승", "loss": "패", "draw": "무"}
+
+
+def _avg(lst) -> float:
+    return round(sum(lst) / len(lst), 1) if lst else 0.0
+
+
+def _detailed_review_stats(db, uid: int, reviews: list) -> dict:
+    """게임 리뷰가 쌓여 있어야 채워지는 세부 지표.
+
+    - 결과별/단계별/기물별/수번호별 정확도
+    - 기물별 움직임 수, 캐슬링 빈도·시점
+    - 전술 포착률, 이론 수 평균
+    - 종료 단계 분포·단계별 결과, 게임 양상(분포·결과·정확도)
+    """
+    review_ids = {r.id for r in reviews}
+    empty = {"hasData": False}
+    if not review_ids:
+        return empty
+
+    # 수별 상세
+    try:
+        moves = db.query(ReviewMove).filter(ReviewMove.user_id == uid).limit(40000).all()
+    except Exception:
+        moves = []
+    moves = [m for m in moves if m.review_id in review_ids]
+
+    # ---- 결과별 정확도 (이길 때/비길 때/질 때/총합) ----
+    acc_by_result = {"win": [], "loss": [], "draw": []}
+    for r in reviews:
+        if r.result in acc_by_result:
+            acc_by_result[r.result].append(r.accuracy)
+    accuracy_by_result = {
+        k: {"accuracy": _avg(v), "games": len(v), "ko": _RESULT_KO[k]}
+        for k, v in acc_by_result.items()
+    }
+    all_acc = [r.accuracy for r in reviews]
+    accuracy_by_result["overall"] = {"accuracy": _avg(all_acc), "games": len(all_acc), "ko": "총합"}
+
+    # ---- 단계별 / 기물별 / 수번호별 정확도, 기물별 움직임 ----
+    phase_acc = defaultdict(list)
+    piece_acc = defaultdict(list)
+    piece_moves = Counter()
+    movenum_acc = defaultdict(list)     # 버킷 → [acc]
+    castle = {"king": 0, "queen": 0, "moves": [], "gamesCastled": set()}
+    tactic_total = tactic_found = 0
+
+    def _bucket(no: int) -> str:
+        if no <= 10: return "1–10수"
+        if no <= 20: return "11–20수"
+        if no <= 30: return "21–30수"
+        if no <= 40: return "31–40수"
+        return "41수+"
+    BUCKET_ORDER = ["1–10수", "11–20수", "21–30수", "31–40수", "41수+"]
+
+    for m in moves:
+        # 이론/강제 수는 정확도 평균에서 제외(실력 무관)
+        countable = m.classification not in ("book", "forced")
+        if m.phase and countable:
+            phase_acc[m.phase].append(m.accuracy)
+        if m.piece:
+            piece_moves[m.piece] += 1
+            if countable:
+                piece_acc[m.piece].append(m.accuracy)
+        if m.move_no and countable:
+            movenum_acc[_bucket(m.move_no)].append(m.accuracy)
+        if m.is_castle:
+            side = m.castle_side if m.castle_side in ("king", "queen") else "king"
+            castle[side] += 1
+            if m.move_no:
+                castle["moves"].append(m.move_no)
+            castle["gamesCastled"].add(m.review_id)
+        if m.is_tactic:
+            tactic_total += 1
+            if m.tactic_found:
+                tactic_found += 1
+
+    accuracy_by_phase = [
+        {"key": p, "ko": _PHASE_KO.get(p, p), "accuracy": _avg(v), "moves": len(v)}
+        for p, v in sorted(phase_acc.items(), key=lambda x: -len(x[1]))
+    ]
+    piece_order = ["p", "n", "b", "r", "q", "k"]
+    accuracy_by_piece = [
+        {"key": p, "ko": _PIECE_KO[p], "accuracy": _avg(piece_acc.get(p, [])),
+         "moves": piece_moves.get(p, 0)}
+        for p in piece_order if piece_moves.get(p, 0)
+    ]
+    total_pmoves = sum(piece_moves.values()) or 1
+    moves_by_piece = [
+        {"key": p, "ko": _PIECE_KO[p], "count": piece_moves.get(p, 0),
+         "pct": round(piece_moves.get(p, 0) / total_pmoves * 100, 1)}
+        for p in piece_order if piece_moves.get(p, 0)
+    ]
+    accuracy_by_movenumber = [
+        {"bucket": b, "accuracy": _avg(movenum_acc.get(b, [])), "moves": len(movenum_acc.get(b, []))}
+        for b in BUCKET_ORDER if movenum_acc.get(b)
+    ]
+
+    # ---- 캐슬링 ----
+    n_reviews = len(reviews) or 1
+    castling = {
+        "king": castle["king"], "queen": castle["queen"],
+        "total": castle["king"] + castle["queen"],
+        "avgMove": round(sum(castle["moves"]) / len(castle["moves"]), 1) if castle["moves"] else 0,
+        "castledGames": len(castle["gamesCastled"]),
+        "castledPct": round(len(castle["gamesCastled"]) / n_reviews * 100, 1),
+        "reviews": len(reviews),
+    }
+
+    # ---- 전술 포착 (수별 우선, 없으면 리뷰 요약 합계) ----
+    if tactic_total == 0:
+        tactic_total = sum(r.tactics_total for r in reviews)
+        tactic_found = sum(r.tactics_found for r in reviews)
+    tactics = {
+        "total": tactic_total, "found": tactic_found, "missed": max(0, tactic_total - tactic_found),
+        "foundPct": round(tactic_found / tactic_total * 100, 1) if tactic_total else 0.0,
+        "missedPct": round((tactic_total - tactic_found) / tactic_total * 100, 1) if tactic_total else 0.0,
+    }
+
+    # ---- 이론(정석) 수 평균 ----
+    book_counts = [r.book for r in reviews]
+    theory = {
+        "avgPerGame": round(sum(book_counts) / len(book_counts), 1) if book_counts else 0.0,
+        "total": sum(book_counts), "reviews": len(reviews),
+    }
+
+    # ---- 종료 단계 분포 + 단계별 결과 ----
+    phase_ended = Counter()
+    result_by_end_phase = defaultdict(lambda: {"win": 0, "loss": 0, "draw": 0})
+    for r in reviews:
+        ph = r.end_phase or "middlegame"
+        phase_ended[ph] += 1
+        if r.result in ("win", "loss", "draw"):
+            result_by_end_phase[ph][r.result] += 1
+    ended_by_phase = [
+        {"key": p, "ko": _PHASE_KO.get(p, p), "count": c}
+        for p, c in phase_ended.most_common()
+    ]
+    result_by_phase = [
+        {"key": p, "ko": _PHASE_KO.get(p, p), **result_by_end_phase[p],
+         "score": _rate(result_by_end_phase[p]),
+         "games": sum(result_by_end_phase[p].values())}
+        for p, _ in phase_ended.most_common()
+    ]
+
+    # ---- 게임 양상(분포 · 결과 · 정확도) ----
+    shape_bucket = defaultdict(lambda: {"win": 0, "loss": 0, "draw": 0, "acc": []})
+    for r in reviews:
+        s = r.game_shape or ""
+        if not s:
+            continue
+        cell = shape_bucket[s]
+        if r.result in ("win", "loss", "draw"):
+            cell[r.result] += 1
+        cell["acc"].append(r.accuracy)
+    game_shapes = [
+        {"key": s, "ko": _SHAPE_KO.get(s, s),
+         "win": c["win"], "loss": c["loss"], "draw": c["draw"],
+         "games": c["win"] + c["loss"] + c["draw"],
+         "score": _rate({"win": c["win"], "loss": c["loss"], "draw": c["draw"]}),
+         "accuracy": _avg(c["acc"])}
+        for s, c in sorted(shape_bucket.items(), key=lambda x: -(x[1]["win"] + x[1]["loss"] + x[1]["draw"]))
+    ]
+
+    return {
+        "hasData": True,
+        "reviews": len(reviews),
+        "movesAnalyzed": len(moves),
+        "accuracyByResult": accuracy_by_result,
+        "accuracyByPhase": accuracy_by_phase,
+        "accuracyByPiece": accuracy_by_piece,
+        "movesByPiece": moves_by_piece,
+        "accuracyByMoveNumber": accuracy_by_movenumber,
+        "castling": castling,
+        "tactics": tactics,
+        "theory": theory,
+        "endedByPhase": ended_by_phase,
+        "resultByPhase": result_by_phase,
+        "gameShapes": game_shapes,
+    }

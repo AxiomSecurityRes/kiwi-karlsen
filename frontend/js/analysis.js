@@ -311,7 +311,9 @@
     $("btnFullReview").disabled = true;
     $("reviewLoading").classList.add("show");
     $("reviewProgress").textContent = "0%";
+    $("bestLine").textContent = "게임을 분석하는 중입니다…";
 
+   try {
     const N = mainline.length;
     const fens = [];
     for (let i = 0; i <= N; i++) fens.push(fenAtPly(i));
@@ -320,6 +322,17 @@
     const raw = await Engine.reviewEvaluateMulti(fens, (done, total) => {
       $("reviewProgress").textContent = Math.round((done / total) * 100) + "%";
     });
+
+    // 엔진이 일부 국면에서 null 을 주면(타임아웃/폴백) 안전한 기본값으로 채운다.
+    // 이 가드가 없으면 아래에서 raw[i].bestCpStm 접근 시 예외 → 리뷰가 멈춰 보인다.
+    for (let i = 0; i < fens.length; i++) {
+      if (!raw[i]) {
+        const term = terminalEval(fens[i]);
+        const cp = term ? term.cp : 0;
+        raw[i] = { cp, bestCpStm: null, secondCpStm: null, best: null, second: null,
+                   mate: null, mateStm: null, depth: 0 };
+      }
+    }
 
     // 2) 이론(정석) 판정 — 오프닝 DB 3,800여 종
     let bookFlags = new Array(N).fill(false);
@@ -378,8 +391,15 @@
       const hadMate = before.mateStm != null && before.mateStm > 0;
       const stillMate = after.mateStm != null && after.mateStm < 0;
 
+      // mover 관점 절대 센티폰 손실 — 승률 포화 구간(압승/완패)에서의 물질 헌납 보정용.
+      // before.bestCpStm(=mover 관점 최선 평가)와 실제로 도달한 국면의 mover 관점 평가 차.
+      const bestCpMover = before.bestCpStm != null
+        ? before.bestCpStm : (moverWhite ? before.cp : -before.cp);
+      const achievedCpMover = moverWhite ? after.cp : -after.cp;
+      const cpDrop = Math.max(0, Math.min(2000, bestCpMover - achievedCpMover));
+
       const cls = R.classify({
-        winBefore, winAfter, isBest, bestWin, secondWin,
+        winBefore, winAfter, isBest, bestWin, secondWin, cpDrop,
         isBook: !!bookFlags[i],
         legalCount, hadMate, gaveMate, stillMate, sacrifice,
       });
@@ -461,20 +481,52 @@
     reviewStats = stats;
     reviewCounts = counts;
 
-    $("reviewLoading").classList.remove("show");
-    $("btnFullReview").disabled = false;
     renderSummary(counts, stats);
     renderGraph();
     renderMoves();
-    reviewing = false;
+    $("bestLine").textContent = "분석 완료 — 수를 클릭하거나 그래프를 눌러 이동하세요.";
 
     saveReviewToInsights(counts, stats);
+   } catch (err) {
+    $("bestLine").textContent =
+      "⚠️ 리뷰 중 오류가 발생했습니다: " + (err && err.message ? err.message : String(err));
+   } finally {
+    $("reviewLoading").classList.remove("show");
+    $("btnFullReview").disabled = false;
+    reviewing = false;
+   }
   }
 
   function emptyCounts() {
     const o = {};
     window.KiwiReview.CLASSES.forEach((c) => { o[c] = 0; });
     return o;
+  }
+
+  /** 게임 양상 판정 — 내 색 관점 승률 곡선 + 결과로 분류.
+   *  wire_to_wire(시종 우세) / comeback(역전) / collapse(리드 상실) /
+   *  seesaw(엎치락뒤치락) / crush(압도) / crushed(완패) / even(균형·접전) */
+  function computeGameShape(color) {
+    if (!winPcts || winPcts.length < 3) return "";
+    // winPcts 는 백 관점. 내 색 관점으로 변환.
+    const mine = winPcts.map((w) => (color === "white" ? w : 100 - w));
+    const start = mine[0], end = mine[mine.length - 1];
+    let maxLead = -Infinity, minLead = Infinity, crossings = 0, prevSign = 0;
+    for (const w of mine) {
+      if (w > maxLead) maxLead = w;
+      if (w < minLead) minLead = w;
+      const sign = w > 55 ? 1 : (w < 45 ? -1 : 0);
+      if (sign !== 0 && prevSign !== 0 && sign !== prevSign) crossings++;
+      if (sign !== 0) prevSign = sign;
+    }
+    const won = end >= 65, lost = end <= 35;
+    if (crossings >= 3) return "seesaw";
+    if (minLead >= 45 && won && maxLead >= 75) return "wire_to_wire";
+    if (minLead <= 25 && won) return "comeback";
+    if (maxLead >= 75 && (lost || (end < 50))) return "collapse";
+    if (won && minLead >= 40 && maxLead - minLead < 25) return "crush";
+    if (lost && maxLead <= 60) return "crushed";
+    return "even";
   }
 
   /** 리뷰 결과 + 수별 상세 데이터를 통찰에 저장 */
@@ -486,6 +538,7 @@
       await API.insightsSaveReview({
         gameId: reviewGameId || null,
         color,
+        gameShape: computeGameShape(color),
         accuracy: st.accuracy || 0,
         estElo: st.estElo || 0,
         avgLoss: st.avgLoss || 0,
@@ -494,34 +547,6 @@
         tacticsFound: st.tacticsFound || 0,
         moves: moveData.filter((m) => m.color === color),
         opponentAccuracy: (stats[color === "white" ? "black" : "white"] || {}).accuracy || 0,
-      });
-    } catch (e) { /* 저장 실패는 조용히 무시 */ }
-  }
-
-  /** 내 색(백/흑)을 추정해 리뷰 결과를 서버에 저장 */
-  async function saveReviewToInsights(counts, stats, drops) {
-    if (!API.getToken()) return;
-    try {
-      const me = API.getUser();
-      // 최근 게임에서 불러온 리뷰면 내 색을 알 수 있다. 아니면 백 기준.
-      let color = reviewColor || "white";
-      const side = counts[color] || {};
-      const st = stats[color] || { accuracy: 0, estElo: 0 };
-      const ds = drops[color] || [];
-      const avgLoss = ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : 0;
-
-      await API.insightsSaveReview({
-        gameId: reviewGameId || null,
-        color,
-        accuracy: st.accuracy || 0,
-        estElo: st.estElo || 0,
-        avgLoss,
-        counts: {
-          brilliant: side.brilliant || 0, great: side.great || 0, best: side.best || 0,
-          excellent: side.excellent || 0, good: side.good || 0, book: side.book || 0,
-          forced: side.forced || 0, inaccuracy: side.inaccuracy || 0,
-          mistake: side.mistake || 0, missed: side.missed || 0, blunder: side.blunder || 0,
-        },
       });
     } catch (e) { /* 저장 실패는 조용히 무시 */ }
   }
@@ -703,12 +728,14 @@
     const strong = await Engine.init();
     const em = $("engineMode");
     if (strong) {
-      em.textContent = "엔진: " + Engine.describe();
+      const threads = Engine.usingThreads && Engine.usingThreads();
+      em.textContent = "엔진: " + Engine.describe() +
+        (threads ? "  ⚡ 멀티스레드 가속" : "");
       em.classList.remove("engine-warn");
     } else {
       em.innerHTML =
-        "⚠️ <b>Stockfish 엔진이 없어 평가가 부정확합니다.</b><br>" +
-        "정확한 분석·게임 리뷰를 하려면 <code>frontend/assets/engine/stockfish.js</code> 를 추가하세요. " +
+        "⚠️ <b>브라우저 Stockfish 로드 실패 — 내장 엔진으로 동작합니다(평가 정확도 낮음).</b><br>" +
+        "네트워크 상태를 확인하거나 페이지를 새로고침해 보세요. " +
         "(현재: " + window.kiwiEscapeHtml(Engine.describe()) + ")";
       em.classList.add("engine-warn");
     }

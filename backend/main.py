@@ -8,9 +8,9 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
-from . import (achievements, auth, bots, clubs, engine, explorer, friends, insights,
-               learn, openings, puzzles, security, sitesettings, streak, training,
-               vision)
+from . import (achievements, auth, bots, chesscom, clubs, engine, explorer, friends,
+               insights, learn, openings, puzzles, security, sitesettings, streak,
+               training, vision)
 from datetime import datetime, timedelta
 
 from .config import settings
@@ -27,7 +27,7 @@ from .schemas import (AccountDelete, AdminFriendAdd, AdminPasswordReset, AdminSt
                       SettingUpdate, UsernameChange,
                       ClubCreate, ClubKickBody, ClubMessageBody, ClubPinBody,
                       ClubPostBody, ClubRoleBody, LearnResultBody, LoginRequest2FA,
-                      OpeningsBookBody, PasswordChange, RegisterRequest, ReviewSave,
+                      ChesscomImportBody, OpeningsBookBody, PasswordChange, RegisterRequest, ReviewSave,
                       TotpDisable, TotpVerify, VisionResultBody)
 
 
@@ -613,6 +613,36 @@ def insights_save_review(body: ReviewSave, user: User = Depends(current_user),
     """게임 리뷰 결과 저장 → 정확도 추이·수 분류 통계에 반영."""
     r = insights.save_review(db, user, body.model_dump(by_alias=True))
     return {"ok": True, "review": r.to_dict()}
+
+
+@app.post("/api/insights/import/chesscom")
+def insights_import_chesscom(body: ChesscomImportBody, user: User = Depends(current_user),
+                             db: Session = Depends(get_db)):
+    """Chess.com 사용자명으로 최근 게임을 가져와 내 통찰에 반영한다.
+
+    가져온 게임은 승/패/무·오프닝·시간제어·종료유형·레이팅 추이에 즉시 반영되고,
+    분석 페이지에서 리뷰하면 정확도·수 분류 등 세부 지표까지 채워진다.
+    """
+    res = chesscom.import_games(db, user, body.username, body.months)
+    return res
+
+
+@app.get("/api/insights/import/status")
+def insights_import_status(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """마지막으로 연동한 Chess.com 사용자명 + 가져온 게임 수."""
+    n = 0
+    try:
+        n = db.query(Game).filter(
+            (Game.white_id == user.id) | (Game.black_id == user.id),
+            Game.source == "chesscom",
+        ).count()
+    except Exception:
+        n = 0
+    return {
+        "chesscomUsername": user.chesscom_username or "",
+        "syncedAt": user.chesscom_synced_at.isoformat() if user.chesscom_synced_at else "",
+        "importedGames": n,
+    }
 
 
 # ==========================================================================

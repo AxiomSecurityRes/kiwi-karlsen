@@ -166,6 +166,11 @@ const API = (() => {
     insightsOf: (username) => request("/api/insights/" + encodeURIComponent(username)),
     insightsSaveReview: (data) =>
       request("/api/insights/review", { method: "POST", body: JSON.stringify(data) }),
+    importChesscom: (username, months) =>
+      request("/api/insights/import/chesscom", {
+        method: "POST", body: JSON.stringify({ username, months: months || 3 }),
+      }),
+    importStatus: () => request("/api/insights/import/status"),
     // 체스 클럽
     clubs: (q, mine) => {
       const p = new URLSearchParams();

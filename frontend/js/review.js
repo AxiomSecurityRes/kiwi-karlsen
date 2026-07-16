@@ -175,6 +175,7 @@
    *   winBefore, winAfter  : mover 관점 승률 (0~100)
    *   isBest               : 엔진 1순위와 동일한 수인가
    *   bestWin, secondWin   : mover 관점, 1순위/2순위 수의 승률 (MultiPV)
+   *   cpDrop               : mover 관점 절대 센티폰 손실 (승률 포화 구간 보정용)
    *   isBook               : 오프닝 DB 국면인가
    *   legalCount           : 합법수 개수
    *   hadMate, gaveMate, stillMate
@@ -182,6 +183,7 @@
    */
   function classify(ctx) {
     const loss = Math.max(0, ctx.winBefore - ctx.winAfter);
+    const cpDrop = Math.max(0, ctx.cpDrop || 0);
 
     // 1) 강제 — 선택지가 없으면 실력과 무관
     if (ctx.legalCount === 1) return "forced";
@@ -192,16 +194,18 @@
     // 3) 외통을 놓았다
     if (ctx.gaveMate) return ctx.isBest ? "best" : "excellent";
 
-    // 4) 탁월한 수 — 최선이면서 진짜 희생이고, 그 결과 여전히 좋다
+    // 4) 탁월한 수 — 최선이면서 진짜 희생이고, 그 결과 여전히 좋다.
     //    (이미 압도적으로 이기고 있으면 '탁월'로 치지 않는다: 아무 수나 이기므로)
     if (ctx.isBest && ctx.sacrifice && loss <= 2 &&
         ctx.winAfter >= 50 && ctx.winBefore <= 97) {
       return "brilliant";
     }
 
-    // 5) 훌륭한 수 — 최선이며 '유일한 수'다 (2순위와 격차가 크다)
+    // 5) 훌륭한 수 — 최선이며 '유일한 수'다(2순위와 격차가 크다).
+    //    접전 구간(양쪽이 갈리는 국면)에서만 — 이미 압승/완패면 제외.
     if (ctx.isBest && ctx.secondWin != null &&
-        (ctx.bestWin - ctx.secondWin) >= 12 && loss <= 2) {
+        (ctx.bestWin - ctx.secondWin) >= 12 && loss <= 2 &&
+        ctx.bestWin >= 15 && ctx.bestWin <= 92) {
       return "great";
     }
 
@@ -214,12 +218,24 @@
     // 7) 최선
     if (ctx.isBest) return "best";
 
-    // 8) 승률 손실 기준
-    if (loss <= 2) return "excellent";
-    if (loss <= 5) return "good";
-    if (loss <= 10) return "inaccuracy";
-    if (loss <= 20) return "mistake";
-    return "blunder";
+    // 8) 승률 손실 기준 등급
+    let tier;
+    if (loss <= 2) tier = "excellent";
+    else if (loss <= 5) tier = "good";
+    else if (loss <= 10) tier = "inaccuracy";
+    else if (loss <= 20) tier = "mistake";
+    else tier = "blunder";
+
+    // 9) 절대 물질 손실 가드 — 승률이 포화(압승/완패)돼 승률 변화가 작아도
+    //    실제로 룩·마이너피스급을 헌납했다면 최소 등급을 강제한다.
+    //    ("이기고 있을 때 기물 헌납이 뛰어남으로 뜨는" 문제 방지)
+    const RANK = ["excellent", "good", "inaccuracy", "mistake", "blunder"];
+    const atLeast = (t) => (RANK.indexOf(tier) < RANK.indexOf(t) ? t : tier);
+    if (cpDrop >= 700) tier = atLeast("blunder");
+    else if (cpDrop >= 300) tier = atLeast("mistake");
+    else if (cpDrop >= 150) tier = atLeast("inaccuracy");
+
+    return tier;
   }
 
   /* ---------------------------------------------------------------

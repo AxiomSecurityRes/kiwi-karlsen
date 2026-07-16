@@ -56,6 +56,28 @@
         <div class="grid" id="insKpi" style="grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px;"></div>
       </div>
 
+      <!-- Chess.com 게임 가져오기 -->
+      <div class="card" id="insImportCard">
+        <h2>♟️ Chess.com 게임 가져오기</h2>
+        <p class="muted" id="insImportStatus">Chess.com 사용자명을 입력하면 최근 게임을 불러와 아래 통찰에 반영합니다.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="ccUser" type="text" placeholder="Chess.com 사용자명 (예: brady0116)"
+                 autocomplete="off" spellcheck="false" style="flex:1;min-width:180px;margin:0;" />
+          <select id="ccMonths" style="width:auto;margin:0;">
+            <option value="1">최근 1개월</option>
+            <option value="3" selected>최근 3개월</option>
+            <option value="6">최근 6개월</option>
+            <option value="12">최근 12개월</option>
+          </select>
+          <button id="ccImportBtn" class="btn">가져오기</button>
+        </div>
+        <p class="muted" id="ccResult" style="margin-top:8px;"></p>
+        <p class="muted" style="font-size:0.78rem;margin-top:4px;">
+          가져온 게임은 승패·오프닝·시간제어·종료유형·레이팅 추이에 즉시 반영됩니다.
+          정확도·수 분류 등 세부 지표는 <a href="/analysis.html?v=30">분석</a>에서 각 게임을 리뷰하면 채워집니다.
+        </p>
+      </div>
+
       <!-- 레이팅 추이 -->
       <div class="card">
         <h2>📈 레이팅 추이</h2>
@@ -128,6 +150,70 @@
           <h2>🔥 연속 기록</h2>
           <div id="insStreak"></div>
         </div>
+      </div>
+
+      <!-- ===== 세부 리뷰 지표 (게임 리뷰가 쌓이면 채워짐) ===== -->
+      <div class="card" id="insDetailedIntro">
+        <h2>🔬 세부 분석</h2>
+        <p class="muted" id="insDetailedNote"></p>
+      </div>
+
+      <div class="grid two">
+        <!-- 결과별 평균 정확도 -->
+        <div class="card">
+          <h2>🎯 결과별 평균 정확도</h2>
+          <div id="insAccResult"></div>
+        </div>
+        <!-- 게임 단계별 정확도 -->
+        <div class="card">
+          <h2>🧩 게임 단계별 정확도</h2>
+          <div id="insPhaseAcc"></div>
+        </div>
+      </div>
+
+      <!-- 수 번호별 정확도 -->
+      <div class="card">
+        <h2>🔢 수 번호별 정확도</h2>
+        <div id="insMoveNumAcc"></div>
+      </div>
+
+      <div class="grid two">
+        <!-- 기물별 평균 정확도 -->
+        <div class="card">
+          <h2>♞ 기물별 평균 정확도</h2>
+          <div id="insPieceAcc"></div>
+        </div>
+        <!-- 기물별 움직임 -->
+        <div class="card">
+          <h2>♟️ 기물별 움직임</h2>
+          <div id="insPieceMoves"></div>
+        </div>
+      </div>
+
+      <!-- 게임 양상 -->
+      <div class="card">
+        <h2>📐 게임 양상</h2>
+        <div id="insShapes"></div>
+      </div>
+
+      <div class="grid two">
+        <!-- 종료된 단계 -->
+        <div class="card">
+          <h2>🏁 어느 단계에서 끝났나</h2>
+          <div id="insEndedPhase"></div>
+          <div id="insResultPhase" style="margin-top:10px;"></div>
+        </div>
+        <!-- 전술 & 이론 -->
+        <div class="card">
+          <h2>⚡ 전술 포착 · 📖 이론</h2>
+          <div id="insTacticsTheory"></div>
+        </div>
+      </div>
+
+      <!-- 캐슬링 -->
+      <div class="card">
+        <h2>🏰 캐슬링</h2>
+        <div id="insCastling"></div>
       </div>
 
       <!-- 활동 패턴 -->

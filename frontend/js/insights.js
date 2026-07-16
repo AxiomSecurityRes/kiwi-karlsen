@@ -173,8 +173,146 @@
       kpi(t.visionCoords, "👁️ 좌표") +
       kpi(t.visionMoves, "👁️ 수순") +
       kpi(t.openingsMastered, "📖 마스터한 오프닝");
+
+    renderDetailed(d.detailed || { hasData: false });
   }
+
+  // ==================== 세부 리뷰 지표 ====================
+  function accColor(a) {
+    return a >= 80 ? "var(--accent)" : (a >= 60 ? "var(--ink-soft)" : "var(--danger)");
+  }
+
+  function renderDetailed(d) {
+    const note = $("insDetailedNote");
+    if (!d || !d.hasData) {
+      note.textContent = "아직 리뷰한 게임이 없습니다. 분석 페이지에서 '전체 분석'을 하면 " +
+        "결과별·단계별·기물별 정확도, 수 번호별 정확도, 캐슬링, 전술·이론, 게임 양상 등 " +
+        "세부 지표가 여기 쌓입니다.";
+      ["insAccResult","insPhaseAcc","insMoveNumAcc","insPieceAcc","insPieceMoves",
+       "insShapes","insEndedPhase","insResultPhase","insTacticsTheory","insCastling"]
+        .forEach((id) => { const el = $(id); if (el) el.innerHTML = '<p class="muted">데이터가 없습니다.</p>'; });
+      return;
+    }
+    note.textContent = `리뷰 ${d.reviews}건 · 분석한 수 ${d.movesAnalyzed.toLocaleString()}개 기준.`;
+
+    // 결과별 평균 정확도
+    const AR = d.accuracyByResult || {};
+    KiwiChart.bars($("insAccResult"), ["win","draw","loss","overall"]
+      .filter((k) => AR[k] && (AR[k].games || k === "overall"))
+      .map((k) => ({
+        label: `${AR[k].ko} (${AR[k].games}판)`,
+        pct: AR[k].accuracy,
+        value: `${AR[k].accuracy}%`,
+        color: k === "overall" ? "var(--info)" : accColor(AR[k].accuracy),
+      })));
+
+    // 게임 단계별 정확도
+    KiwiChart.bars($("insPhaseAcc"), (d.accuracyByPhase || []).map((p) => ({
+      label: `${p.ko} (${p.moves}수)`, pct: p.accuracy, value: `${p.accuracy}%`, color: accColor(p.accuracy),
+    })));
+
+    // 수 번호별 정확도
+    KiwiChart.bars($("insMoveNumAcc"), (d.accuracyByMoveNumber || []).map((b) => ({
+      label: `${b.bucket} (${b.moves}수)`, pct: b.accuracy, value: `${b.accuracy}%`, color: accColor(b.accuracy),
+    })));
+
+    // 기물별 평균 정확도
+    KiwiChart.bars($("insPieceAcc"), (d.accuracyByPiece || []).map((p) => ({
+      label: `${p.ko} (${p.moves}수)`, pct: p.accuracy, value: `${p.accuracy}%`, color: accColor(p.accuracy),
+    })));
+
+    // 기물별 움직임
+    KiwiChart.bars($("insPieceMoves"), (d.movesByPiece || []).map((p) => ({
+      label: p.ko, pct: p.pct, value: `${p.count} (${p.pct}%)`, color: "var(--accent)",
+    })));
+
+    // 게임 양상 (분포 + 결과 + 정확도)
+    const shapes = d.gameShapes || [];
+    $("insShapes").innerHTML = shapes.length ? shapes.map((s) => `
+      <div class="ins-row">
+        <div class="ins-row-head">
+          <b>${esc(s.ko)}</b>
+          <span class="ins-score">${s.score}% <small>(${s.games}판 · 정확도 ${s.accuracy}%)</small></span>
+        </div>
+        ${KiwiChart.wdl(s.win, s.draw, s.loss)}
+      </div>`).join("") : '<p class="muted">양상 데이터가 없습니다.</p>';
+
+    // 어느 단계에서 끝났나
+    const endTotal = (d.endedByPhase || []).reduce((a, x) => a + x.count, 0);
+    KiwiChart.bars($("insEndedPhase"), (d.endedByPhase || []).map((p) => ({
+      label: p.ko, pct: endTotal ? (p.count / endTotal) * 100 : 0, value: `${p.count}판`, color: "var(--k-rind)",
+    })));
+    $("insResultPhase").innerHTML = (d.resultByPhase || []).map((p) => `
+      <div class="ins-row">
+        <div class="ins-row-head"><b>${esc(p.ko)}에서 종료</b>
+          <span class="ins-score">${p.score}% <small>(${p.games}판)</small></span></div>
+        ${KiwiChart.wdl(p.win, p.draw, p.loss)}
+      </div>`).join("");
+
+    // 전술 & 이론
+    const tc = d.tactics || {}, th = d.theory || {};
+    $("insTacticsTheory").innerHTML =
+      kpi(`${tc.found || 0}/${tc.total || 0}`, "전술 포착") +
+      kpi(`${tc.foundPct || 0}%`, "포착률") +
+      kpi(`${tc.missed || 0}`, "놓친 전술") +
+      kpi(`${th.avgPerGame || 0}`, "게임당 이론 수");
+    $("insTacticsTheory").className = "grid";
+    $("insTacticsTheory").style.gridTemplateColumns = "repeat(auto-fit,minmax(90px,1fr))";
+    $("insTacticsTheory").style.gap = "10px";
+
+    // 캐슬링
+    const c = d.castling || {};
+    $("insCastling").innerHTML =
+      kpi(c.king || 0, "킹사이드 O-O") +
+      kpi(c.queen || 0, "퀸사이드 O-O-O") +
+      kpi(`${c.castledPct || 0}%`, "캐슬링한 게임") +
+      kpi(c.avgMove || 0, "평균 캐슬링 수");
+    $("insCastling").className = "grid";
+    $("insCastling").style.gridTemplateColumns = "repeat(auto-fit,minmax(90px,1fr))";
+    $("insCastling").style.gap = "10px";
+  }
+
+  // ==================== Chess.com 가져오기 ====================
+  async function loadImportStatus() {
+    if (!API.getToken()) return;
+    try {
+      const s = await API.importStatus();
+      if (s.chesscomUsername) {
+        $("ccUser").value = s.chesscomUsername;
+        $("insImportStatus").textContent =
+          `연동됨: ${s.chesscomUsername} · 가져온 게임 ${s.importedGames}판`;
+      }
+    } catch (e) { /* noop */ }
+  }
+
+  async function doImport() {
+    const username = $("ccUser").value.trim();
+    if (!username) { $("ccResult").textContent = "사용자명을 입력하세요."; return; }
+    const months = parseInt($("ccMonths").value, 10) || 3;
+    const btn = $("ccImportBtn");
+    btn.disabled = true;
+    $("ccResult").textContent = "Chess.com에서 게임을 가져오는 중… (수십 초 걸릴 수 있어요)";
+    try {
+      const r = await API.importChesscom(username, months);
+      if (!r.ok) {
+        $("ccResult").textContent = "⚠️ " + (r.error || "가져오기에 실패했습니다.");
+      } else {
+        $("ccResult").textContent =
+          `✅ ${r.imported}판 가져옴 (중복/제외 ${r.skipped}판). 통찰을 새로고침합니다…`;
+        await load();
+        await loadImportStatus();
+      }
+    } catch (e) {
+      $("ccResult").textContent = "⚠️ " + (e.message || "가져오기 중 오류가 발생했습니다.");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  $("ccImportBtn").addEventListener("click", doImport);
+  $("ccUser").addEventListener("keydown", (e) => { if (e.key === "Enter") doImport(); });
 
   $("insRange").addEventListener("change", load);
   load();
+  loadImportStatus();
 })();

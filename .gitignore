@@ -8,5 +8,5 @@ venv/
 node_modules/
 .DS_Store
 
-# 거대 NNUE 신경망만 제외 (Stockfish 10 고전 평가는 번들됨)
+# 별도 .nnue 신경망 파일만 제외 (SF18 lite 는 wasm 에 NNUE 내장 → wasm 은 커밋됨)
 *.nnue

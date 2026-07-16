@@ -254,8 +254,12 @@ SECURITY_HEADERS = {
     ),
     # HTTPS 강제 (2년, 서브도메인 포함). Render 는 HTTPS 를 제공한다.
     "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
-    # 교차 출처 격리 — Spectre 류 사이드채널 및 창 조작 방어
+    # 교차 출처 격리 — Spectre 류 방어 + SharedArrayBuffer 활성화.
+    # COEP require-corp 를 더하면 crossOriginIsolated === true 가 되어
+    # 멀티스레드 Stockfish(WASM threads) 를 쓸 수 있다. 모든 리소스가
+    # 동일 출처이고 CORP: same-origin 이 이미 붙으므로 안전하다.
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "require-corp",
     "Cross-Origin-Resource-Policy": "same-origin",
     # 구형 플러그인 정책 파일 차단
     "X-Permitted-Cross-Domain-Policies": "none",

@@ -164,7 +164,13 @@ class ReviewSave(BaseModel):
     tacticsTotal: int = Field(default=0, ge=0, le=400)
     tacticsFound: int = Field(default=0, ge=0, le=400)
     opponentAccuracy: float = Field(default=0, ge=0, le=100)
+    gameShape: str = Field(default="", max_length=16)
     moves: list[ReviewMoveIn] = Field(default_factory=list, max_length=400)
+
+
+class ChesscomImportBody(BaseModel):
+    username: str = Field(min_length=1, max_length=40)
+    months: int = Field(default=3, ge=1, le=24)
 
 
 class ClubCreate(BaseModel):

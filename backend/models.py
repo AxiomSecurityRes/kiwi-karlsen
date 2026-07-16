@@ -58,6 +58,10 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
     password_changed_at = Column(DateTime, nullable=True)
 
+    # Chess.com 게임 가져오기 연동
+    chesscom_username = Column(String(40), default="", nullable=False)
+    chesscom_synced_at = Column(DateTime, nullable=True)
+
     # 관리자 / 제재
     is_admin = Column(Integer, default=0, nullable=False)  # 0/1
     banned = Column(Integer, default=0, nullable=False)    # 0/1
@@ -121,6 +125,9 @@ class Game(Base):
     ply_count = Column(Integer, default=0, nullable=False)     # 총 플라이 수
     white_rating_after = Column(Float, default=0.0)            # 대국 후 레이팅
     black_rating_after = Column(Float, default=0.0)
+    # 게임 출처 — 'site'(우리 대국) / 'chesscom'(가져온 게임)
+    source = Column(String(12), default="site", nullable=False, index=True)
+    ext_id = Column(String(80), default="", nullable=False)    # 외부 게임 식별자(중복 방지)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -494,6 +501,7 @@ class GameReview(Base):
     # 게임 결과·단계 (통찰 연계용)
     result = Column(String(6), default="", nullable=False)      # win/loss/draw
     end_phase = Column(String(12), default="", nullable=False)  # 종료된 단계
+    game_shape = Column(String(16), default="", nullable=False)  # 게임 양상
 
     brilliant = Column(Integer, default=0, nullable=False)
     great = Column(Integer, default=0, nullable=False)
