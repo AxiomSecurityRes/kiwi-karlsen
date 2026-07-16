@@ -1,6 +1,6 @@
 /* 앱 버전 — 캐시된 옛 페이지로 이동하지 않도록 링크에 붙인다.
    (scripts/bump_version.py 가 자동 갱신) */
-window.KIWI_VERSION = "28";
+window.KIWI_VERSION = "30";
 window.kiwiPageUrl = function (page) {
   const p = String(page).replace(/^\/*/, "/");
   return p + (p.indexOf("?") === -1 ? "?v=" : "&v=") + window.KIWI_VERSION;
