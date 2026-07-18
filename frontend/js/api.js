@@ -1,6 +1,6 @@
 /* 앱 버전 — 캐시된 옛 페이지로 이동하지 않도록 링크에 붙인다.
    (scripts/bump_version.py 가 자동 갱신) */
-window.KIWI_VERSION = "30";
+window.KIWI_VERSION = "32";
 window.kiwiPageUrl = function (page) {
   const p = String(page).replace(/^\/*/, "/");
   return p + (p.indexOf("?") === -1 ? "?v=" : "&v=") + window.KIWI_VERSION;
@@ -162,7 +162,14 @@ const API = (() => {
     visionLeaderboard: (mode) => request("/api/vision/leaderboard?mode=" + encodeURIComponent(mode)),
     visionHistory: () => request("/api/vision/history"),
     // 통찰 (Insights)
-    insights: (days = 0) => request("/api/insights" + (days ? "?days=" + days : "")),
+    insights: (days = 0, includeBots = false, tc = "", source = "") => {
+      const q = [];
+      if (days) q.push("days=" + days);
+      if (includeBots) q.push("includeBots=1");
+      if (tc) q.push("tc=" + encodeURIComponent(tc));
+      if (source) q.push("source=" + encodeURIComponent(source));
+      return request("/api/insights" + (q.length ? "?" + q.join("&") : ""));
+    },
     insightsOf: (username) => request("/api/insights/" + encodeURIComponent(username)),
     insightsSaveReview: (data) =>
       request("/api/insights/review", { method: "POST", body: JSON.stringify(data) }),
@@ -171,6 +178,8 @@ const API = (() => {
         method: "POST", body: JSON.stringify({ username, months: months || 3 }),
       }),
     importStatus: () => request("/api/insights/import/status"),
+    saveBotGame: (data) =>
+      request("/api/games/bot", { method: "POST", body: JSON.stringify(data) }),
     // 체스 클럽
     clubs: (q, mine) => {
       const p = new URLSearchParams();

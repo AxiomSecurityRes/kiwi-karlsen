@@ -128,6 +128,7 @@ class Game(Base):
     # 게임 출처 — 'site'(우리 대국) / 'chesscom'(가져온 게임)
     source = Column(String(12), default="site", nullable=False, index=True)
     ext_id = Column(String(80), default="", nullable=False)    # 외부 게임 식별자(중복 방지)
+    opp_country = Column(String(8), default="", nullable=False)  # 상대 국가코드(지리 통계)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

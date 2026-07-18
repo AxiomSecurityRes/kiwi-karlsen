@@ -55,6 +55,34 @@ def verify_user(username: str) -> Optional[dict]:
     return None
 
 
+# 상대 국가 조회 결과 캐시 (프로세스 수명 동안 유지) — 같은 상대를 반복 조회하지 않는다.
+_country_cache: dict[str, str] = {}
+MAX_COUNTRY_LOOKUPS = 60      # 가져오기 1회당 신규 조회 상한(API 예의)
+
+
+def _country_of(client, username: str, budget: list[int]) -> str:
+    """Chess.com 프로필의 country URL 에서 국가코드 추출. 실패 시 ''."""
+    u = _norm_username(username)
+    if not u:
+        return ""
+    if u in _country_cache:
+        return _country_cache[u]
+    if budget[0] <= 0:
+        return ""
+    budget[0] -= 1
+    code = ""
+    try:
+        r = client.get(f"https://api.chess.com/pub/player/{u}")
+        if r.status_code == 200:
+            url = (r.json() or {}).get("country") or ""
+            # 예: https://api.chess.com/pub/country/KR → "KR"
+            code = url.rstrip("/").split("/")[-1][:8] if url else ""
+    except Exception:
+        code = ""
+    _country_cache[u] = code
+    return code
+
+
 def _list_archives(username: str) -> list[str]:
     try:
         with _client() as c:
@@ -183,6 +211,7 @@ def import_games(db, user: User, username: str, months: int = DEFAULT_MONTHS,
     skipped = 0
     total = 0
     rows = []
+    budget = [MAX_COUNTRY_LOOKUPS]
 
     try:
         with _client() as c:
@@ -252,6 +281,7 @@ def import_games(db, user: User, username: str, months: int = DEFAULT_MONTHS,
                         ply_count=_ply_count(pgn),
                         white_rating_after=w_elo, black_rating_after=b_elo,
                         source="chesscom", ext_id=ext[:80],
+                        opp_country=_country_of(c, b_user if me_white else w_user, budget),
                         created_at=dt,
                     ))
                     existing.add(ext)

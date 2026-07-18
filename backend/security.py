@@ -234,7 +234,9 @@ CSP = (
     "worker-src 'self' blob:; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
-    "connect-src 'self' ws: wss:; "
+    # explorer.lichess.ovh: 서버 프록시가 공유 IP 레이트리밋(429)에 걸렸을 때
+    # 브라우저에서 직접 탐색기를 조회하기 위한 폴백 경로.
+    "connect-src 'self' ws: wss: https://explorer.lichess.ovh; "
     "font-src 'self' data:; "
     "object-src 'none'; "
     "base-uri 'self'; "

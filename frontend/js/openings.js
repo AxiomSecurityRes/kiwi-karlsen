@@ -129,6 +129,67 @@
     </span>`;
   }
 
+  /** 서버 프록시가 429(공유 IP 레이트리밋) 등으로 실패했을 때,
+   *  사용자 브라우저에서 Lichess 를 직접 조회한다. 각자 IP 를 쓰므로
+   *  공유 IP 제한을 우회할 수 있다. 실패하면 null 을 돌려 로컬 통계를 쓴다. */
+  async function fetchLichessDirect(src) {
+    try {
+      const play = uciHistory();
+      const base = src === "masters"
+        ? "https://explorer.lichess.ovh/masters"
+        : "https://explorer.lichess.ovh/lichess";
+      const p = new URLSearchParams();
+      if (play) p.set("play", play);
+      p.set("moves", "12");
+      p.set("topGames", "0");
+      if (src !== "masters") {
+        p.set("variant", "standard");
+        p.set("recentGames", "0");
+        selRatings.forEach((r) => p.append("ratings", String(r)));
+        selSpeeds.forEach((s) => p.append("speeds", s));
+      }
+      const res = await fetch(base + "?" + p.toString(), { headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      const raw = await res.json();
+      // 서버와 동일한 형태로 정규화
+      const white = raw.white || 0, draws = raw.draws || 0, black = raw.black || 0;
+      const total = white + draws + black;
+      const moves = (raw.moves || []).map((m) => {
+        const w = m.white || 0, d = m.draws || 0, b = m.black || 0, t = w + d + b;
+        return t ? {
+          san: m.san || "", uci: m.uci || "", games: t, white: w, draws: d, black: b,
+          whitePct: +(w / t * 100).toFixed(1), drawPct: +(d / t * 100).toFixed(1),
+          blackPct: +(b / t * 100).toFixed(1), share: 0,
+          avgRating: m.averageRating || m.averageOpponentRating || null,
+        } : null;
+      }).filter(Boolean);
+      const mt = moves.reduce((a, m) => a + m.games, 0) || 1;
+      moves.forEach((m) => { m.share = +(m.games / mt * 100).toFixed(1); });
+      moves.sort((a, b2) => b2.games - a.games);
+      return {
+        source: src, total, white, draws, black,
+        whitePct: total ? +(white / total * 100).toFixed(1) : 0,
+        drawPct: total ? +(draws / total * 100).toFixed(1) : 0,
+        blackPct: total ? +(black / total * 100).toFixed(1) : 0,
+        moves, opening: raw.opening || null, direct: true, fallback: false, reason: "",
+      };
+    } catch (e) { return null; }
+  }
+
+  /** 현재 수순을 UCI CSV 로 (Lichess play 파라미터용) */
+  function uciHistory() {
+    try {
+      const g = new Chess();
+      const out = [];
+      for (const san of history) {
+        const m = g.move(san);
+        if (!m) break;
+        out.push(m.from + m.to + (m.promotion || ""));
+      }
+      return out.join(",");
+    } catch (e) { return ""; }
+  }
+
   async function refresh() {
     renderMoveLine();
     const src = $("expSource").value;
@@ -136,7 +197,14 @@
     $("expMoves").innerHTML = '<p class="muted">불러오는 중…</p>';
 
     try {
-      const data = await API.explorer(history, selRatings, selSpeeds, src);
+      let data = await API.explorer(history, selRatings, selSpeeds, src);
+
+      // 서버 프록시가 실패(429 등)했고 온라인 소스를 원했다면,
+      // 브라우저에서 직접 Lichess 를 조회해 본다.
+      if (data.fallback && (src === "lichess" || src === "masters")) {
+        const direct = await fetchLichessDirect(src);
+        if (direct) data = direct;
+      }
 
       // 오프닝 이름
       if (data.opening) {
@@ -148,10 +216,18 @@
       }
 
       // 요약
-      const srcLabel = data.source === "lichess" ? "Lichess" : "이 사이트";
+      const srcLabel = data.source === "lichess" ? "Lichess"
+        : (data.source === "masters" ? "마스터 DB" : "이 사이트");
+      const reasonKo = {
+        ratelimit: "Lichess 요청 한도 초과(잠시 후 자동 복구)",
+        network: "Lichess 연결 실패",
+        http: "Lichess 응답 오류",
+        cooldown: "Lichess 재시도 대기 중",
+      }[data.reason] || "Lichess 조회 실패";
       const note = data.fallback
-        ? '<span class="exp-warn">⚠️ Lichess 조회 실패 — 이 사이트 게임으로 대체</span>'
-        : (data.cached ? '<span class="muted">· 캐시됨</span>' : "");
+        ? `<span class="exp-warn">⚠️ ${esc(reasonKo)} — 이 사이트 게임으로 대체</span>`
+        : (data.direct ? '<span class="muted">· 브라우저 직접 조회</span>'
+                       : (data.cached ? '<span class="muted">· 캐시됨</span>' : ""));
       if (!data.total) {
         $("expSummary").innerHTML =
           `<div class="muted">이 국면의 통계가 없습니다. ${note}</div>`;

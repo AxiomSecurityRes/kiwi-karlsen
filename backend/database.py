@@ -39,6 +39,7 @@ def _migrate_columns() -> None:
             "black_rating_after": "FLOAT DEFAULT 0",
             "source": "VARCHAR(12) DEFAULT 'site'",
             "ext_id": "VARCHAR(80) DEFAULT ''",
+            "opp_country": "VARCHAR(8) DEFAULT ''",
         },
         "users": {
             "chesscom_username": "VARCHAR(40) DEFAULT ''",

@@ -281,6 +281,26 @@
     $("botResultText").textContent = `(${reason}) — 상대 ELO ${playElo}`;
     $("botResultModal").classList.add("show");
     Sounds.play(outcome === "win" ? "win" : outcome === "loss" ? "lose" : "draw");
+    saveBotGame(outcome, reason);
+  }
+
+  /** 봇 대국을 서버에 저장 — 통찰의 '봇 대국 포함' 옵션에서 볼 수 있다.
+   *  사람 상대 레이팅에는 영향을 주지 않는다. */
+  async function saveBotGame(outcome, reason) {
+    if (!API.getToken() || !game) return;
+    try {
+      await API.saveBotGame({
+        color: myColor === "w" ? "white" : "black",
+        result: outcome,
+        reason: reason || "",
+        pgn: game.pgn(),
+        botName: (selectedBot && selectedBot.name) || ("Stockfish " + (playElo || "")),
+        botElo: playElo || 0,
+        minutes: Math.round((timeLimit || 0) / 60),
+        increment: 0,
+        plyCount: game.history().length,
+      });
+    } catch (e) { /* 저장 실패는 조용히 무시 */ }
   }
 
   // ---------- 버튼 ----------

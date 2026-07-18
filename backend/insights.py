@@ -30,12 +30,35 @@ from .models import (BattleSession, Game, GameReview, OpeningProgress,
 MAX_GAMES = 500
 
 
-def _games_of(db: Session, user: User, days: int = 0) -> list[Game]:
+def _tc_key(g: Game) -> str:
+    """시간제어 분류 키 — 필터/집계 공용."""
+    m = g.minutes or 0
+    if m <= 0:
+        return "other"
+    if m < 3:
+        return "bullet"
+    if m < 10:
+        return "blitz"
+    if m < 30:
+        return "rapid"
+    return "classical"
+
+
+def _games_of(db: Session, user: User, days: int = 0, include_bots: bool = False,
+              tc: str = "", src: str = "") -> list[Game]:
     q = db.query(Game).filter((Game.white_id == user.id) | (Game.black_id == user.id))
+    if not include_bots:
+        # 봇 대국은 기본 제외(사람 상대 성적을 왜곡하지 않도록).
+        q = q.filter(Game.source != "bot")
+    if src in ("site", "chesscom", "bot"):
+        q = q.filter(Game.source == src)
     if days > 0:
         since = datetime.utcnow() - timedelta(days=days)
         q = q.filter(Game.created_at >= since)
-    return q.order_by(Game.id.asc()).limit(MAX_GAMES).all()
+    rows = q.order_by(Game.id.asc()).limit(MAX_GAMES).all()
+    if tc in ("bullet", "blitz", "rapid", "classical", "other"):
+        rows = [g for g in rows if _tc_key(g) == tc]
+    return rows
 
 
 def _outcome(g: Game, user_id: int) -> str:
@@ -72,9 +95,11 @@ def _rate(d: dict) -> float:
 
 
 # ---------------------------------------------------------------------------
-def build(db: Session, user: User, days: int = 0) -> dict:
-    games = _games_of(db, user, days)
+def build(db: Session, user: User, days: int = 0, include_bots: bool = False,
+          tc: str = "", src: str = "") -> dict:
+    games = _games_of(db, user, days, include_bots, tc, src)
     uid = user.id
+    game_ids = {g.id for g in games}
 
     # ---- 1. 레이팅 추이 ----
     rating_points = []
@@ -189,7 +214,13 @@ def build(db: Session, user: User, days: int = 0) -> dict:
         worst_streak = max(worst_streak, cur_loss)
 
     # ---- 9~10. 정확도 · 수 분류 (게임 리뷰 기록) ----
-    reviews = db.query(GameReview).filter(GameReview.user_id == uid).order_by(
+    reviews_q = db.query(GameReview).filter(GameReview.user_id == uid)
+    if not include_bots:
+        # 봇 대국 리뷰 제외 — game_id 가 없는(임시 PGN) 리뷰는 그대로 포함
+        reviews_q = reviews_q.filter(
+            (GameReview.game_id.is_(None)) | (GameReview.game_id.in_(game_ids) if game_ids else GameReview.game_id.is_(None))
+        )
+    reviews = reviews_q.order_by(
         GameReview.id.asc()).limit(MAX_GAMES).all()
     accuracy_points = [{
         "ts": r.created_at.isoformat() if r.created_at else "",
@@ -220,6 +251,9 @@ def build(db: Session, user: User, days: int = 0) -> dict:
         if not g.created_at:
             continue
         heat[g.created_at.weekday()][g.created_at.hour] += 1
+
+    # ---- 11b. 요일별 / 시간대별 결과 + 정확도, 지리 ----
+    timing_geo = _timing_and_geography(db, user, games, uid)
 
     # ---- 12. 훈련 현황 ----
     puzzle_attempts = db.query(PuzzleAttempt).filter(PuzzleAttempt.user_id == uid).count()
@@ -267,6 +301,9 @@ def build(db: Session, user: User, days: int = 0) -> dict:
         },
         "moveDistribution": move_dist,
         "detailed": detailed,
+        "timing": timing_geo["timing"],
+        "geography": timing_geo["geography"],
+        "filters": {"tc": tc or "", "source": src or "", "includeBots": bool(include_bots)},
         "activity": heat,
         "training": {
             "puzzleRating": round(user.puzzle_rating),
@@ -561,4 +598,124 @@ def _detailed_review_stats(db, uid: int, reviews: list) -> dict:
         "endedByPhase": ended_by_phase,
         "resultByPhase": result_by_phase,
         "gameShapes": game_shapes,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 요일 / 시간대 / 지리 — 결과 + 정확도
+# ---------------------------------------------------------------------------
+_WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
+
+# 국가코드 → 한국어 국가명 (자주 등장하는 곳 위주, 없으면 코드 그대로)
+_COUNTRY_KO = {
+    "KR": "대한민국", "US": "미국", "JP": "일본", "CN": "중국", "IN": "인도",
+    "RU": "러시아", "DE": "독일", "FR": "프랑스", "GB": "영국", "ES": "스페인",
+    "IT": "이탈리아", "BR": "브라질", "CA": "캐나다", "AU": "호주", "NL": "네덜란드",
+    "PL": "폴란드", "UA": "우크라이나", "TR": "튀르키예", "AR": "아르헨티나",
+    "MX": "멕시코", "VN": "베트남", "PH": "필리핀", "ID": "인도네시아", "TH": "태국",
+    "SE": "스웨덴", "NO": "노르웨이", "FI": "핀란드", "DK": "덴마크", "CZ": "체코",
+    "PT": "포르투갈", "GR": "그리스", "IL": "이스라엘", "IR": "이란", "EG": "이집트",
+    "ZA": "남아프리카", "NG": "나이지리아", "AM": "아르메니아", "GE": "조지아",
+    "AZ": "아제르바이잔", "KZ": "카자흐스탄", "UZ": "우즈베키스탄", "RS": "세르비아",
+    "HU": "헝가리", "RO": "루마니아", "BG": "불가리아", "HR": "크로아티아",
+    "AT": "오스트리아", "CH": "스위스", "BE": "벨기에", "IE": "아일랜드",
+    "NZ": "뉴질랜드", "SG": "싱가포르", "MY": "말레이시아", "TW": "대만", "HK": "홍콩",
+    "CL": "칠레", "CO": "콜롬비아", "PE": "페루", "VE": "베네수엘라", "CU": "쿠바",
+}
+
+
+def _timing_and_geography(db: Session, user: User, games: list, uid: int) -> dict:
+    """요일별·시간대별 결과와 정확도, 그리고 상대 국가별 성적.
+
+    정확도는 게임에 연결된 리뷰(GameReview)가 있어야 나온다.
+    """
+    # game_id → 리뷰 정확도
+    acc_by_game: dict[int, float] = {}
+    try:
+        gids = [g.id for g in games]
+        if gids:
+            for r in db.query(GameReview).filter(
+                    GameReview.user_id == uid, GameReview.game_id.in_(gids)).all():
+                if r.game_id:
+                    acc_by_game[r.game_id] = r.accuracy
+    except Exception:
+        acc_by_game = {}
+
+    weekday = [{"key": i, "ko": _WEEKDAY_KO[i], **_wdl_dict(), "acc": []} for i in range(7)]
+    # 시간대는 4시간 단위 6구간(모바일 가독성)
+    HOUR_BANDS = [(0, 4, "새벽 0–4시"), (4, 8, "이른 아침 4–8시"), (8, 12, "오전 8–12시"),
+                  (12, 16, "낮 12–16시"), (16, 20, "저녁 16–20시"), (20, 24, "밤 20–24시")]
+    hours = [{"key": i, "ko": lbl, **_wdl_dict(), "acc": []}
+             for i, (a, b, lbl) in enumerate(HOUR_BANDS)]
+    geo: dict[str, dict] = {}
+
+    for g in games:
+        if not g.created_at:
+            continue
+        out = _outcome(g, uid)
+        acc = acc_by_game.get(g.id)
+
+        wd = weekday[g.created_at.weekday()]
+        wd[out] += 1
+        if acc is not None:
+            wd["acc"].append(acc)
+
+        h = g.created_at.hour
+        for i, (a, b, _lbl) in enumerate(HOUR_BANDS):
+            if a <= h < b:
+                hours[i][out] += 1
+                if acc is not None:
+                    hours[i]["acc"].append(acc)
+                break
+
+        code = (getattr(g, "opp_country", "") or "").upper()
+        if code:
+            cell = geo.setdefault(code, {**_wdl_dict(), "acc": []})
+            cell[out] += 1
+            if acc is not None:
+                cell["acc"].append(acc)
+
+    def _pack(rows):
+        out = []
+        for r in rows:
+            n = r["win"] + r["loss"] + r["draw"]
+            if not n:
+                continue
+            out.append({
+                "key": r["key"], "ko": r["ko"],
+                "win": r["win"], "loss": r["loss"], "draw": r["draw"],
+                "games": n, "score": _rate(r),
+                "accuracy": _avg(r["acc"]), "reviewed": len(r["acc"]),
+            })
+        return out
+
+    countries = []
+    for code, c in geo.items():
+        n = c["win"] + c["loss"] + c["draw"]
+        countries.append({
+            "code": code, "ko": _COUNTRY_KO.get(code, code),
+            "win": c["win"], "loss": c["loss"], "draw": c["draw"],
+            "games": n, "score": _rate(c),
+            "accuracy": _avg(c["acc"]), "reviewed": len(c["acc"]),
+        })
+    countries.sort(key=lambda x: -x["games"])
+
+    best = worst = None
+    ranked = [c for c in countries if c["games"] >= 3]
+    if ranked:
+        best = max(ranked, key=lambda x: x["score"])
+        worst = min(ranked, key=lambda x: x["score"])
+
+    return {
+        "timing": {
+            "weekday": _pack(weekday),
+            "hourBands": _pack(hours),
+            "hasAccuracy": bool(acc_by_game),
+        },
+        "geography": {
+            "countries": countries[:20],
+            "totalCountries": len(countries),
+            "withCountry": sum(c["games"] for c in countries),
+            "best": best, "worst": worst,
+        },
     }

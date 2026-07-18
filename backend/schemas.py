@@ -168,6 +168,18 @@ class ReviewSave(BaseModel):
     moves: list[ReviewMoveIn] = Field(default_factory=list, max_length=400)
 
 
+class BotGameSave(BaseModel):
+    color: str = Field(default="white", max_length=5)
+    result: str = Field(default="draw", max_length=5)   # win/loss/draw
+    reason: str = Field(default="", max_length=40)
+    pgn: str = Field(default="", max_length=20000)
+    botName: str = Field(default="", max_length=40)
+    botElo: int = Field(default=0, ge=0, le=4000)
+    minutes: int = Field(default=0, ge=0, le=500)
+    increment: int = Field(default=0, ge=0, le=300)
+    plyCount: int = Field(default=0, ge=0, le=1000)
+
+
 class ChesscomImportBody(BaseModel):
     username: str = Field(min_length=1, max_length=40)
     months: int = Field(default=3, ge=1, le=24)

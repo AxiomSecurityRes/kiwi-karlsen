@@ -27,7 +27,7 @@ from .schemas import (AccountDelete, AdminFriendAdd, AdminPasswordReset, AdminSt
                       SettingUpdate, UsernameChange,
                       ClubCreate, ClubKickBody, ClubMessageBody, ClubPinBody,
                       ClubPostBody, ClubRoleBody, LearnResultBody, LoginRequest2FA,
-                      ChesscomImportBody, OpeningsBookBody, PasswordChange, RegisterRequest, ReviewSave,
+                      BotGameSave, ChesscomImportBody, OpeningsBookBody, PasswordChange, RegisterRequest, ReviewSave,
                       TotpDisable, TotpVerify, VisionResultBody)
 
 
@@ -583,9 +583,16 @@ def rush_history(user: User = Depends(current_user), db: Session = Depends(get_d
 # ==========================================================================
 @app.get("/api/insights")
 def insights_get(days: int = Query(default=0, ge=0, le=3650),
+                 includeBots: int = Query(default=0, ge=0, le=1),
+                 tc: str = Query(default="", max_length=12),
+                 source: str = Query(default="", max_length=12),
                  user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """내 체스 데이터 분석 — 레이팅/색깔/오프닝/정확도/활동 패턴 등."""
-    return insights.build(db, user, days)
+    """내 체스 데이터 분석 — 레이팅/색깔/오프닝/정확도/활동 패턴 등.
+
+    includeBots=1 이면 봇 대국도 통계에 포함한다(기본 제외).
+    """
+    return insights.build(db, user, days, include_bots=bool(includeBots),
+                          tc=tc, src=source)
 
 
 @app.get("/api/insights/{username}")
@@ -625,6 +632,43 @@ def insights_import_chesscom(body: ChesscomImportBody, user: User = Depends(curr
     """
     res = chesscom.import_games(db, user, body.username, body.months)
     return res
+
+
+@app.post("/api/games/bot")
+def save_bot_game(body: BotGameSave, user: User = Depends(current_user),
+                  db: Session = Depends(get_db)):
+    """봇 대국 결과를 저장한다 (source='bot').
+
+    통찰에서는 기본적으로 제외되고, '봇 대국 포함' 옵션을 켜면 반영된다.
+    사람 상대 Glicko 레이팅에는 영향을 주지 않는다.
+    """
+    me_white = (body.color == "white")
+    bot_label = (body.botName or "봇")[:40]
+    if body.result == "win":
+        result = "1-0" if me_white else "0-1"
+    elif body.result == "loss":
+        result = "0-1" if me_white else "1-0"
+    else:
+        result = "1/2-1/2"
+    g = Game(
+        white_id=user.id if me_white else None,
+        black_id=None if me_white else user.id,
+        white_name=user.username if me_white else bot_label,
+        black_name=bot_label if me_white else user.username,
+        result=result, reason=(body.reason or "")[:40], pgn=body.pgn or "",
+        white_rating_change=0.0, black_rating_change=0.0,
+        minutes=int(body.minutes or 0), increment=int(body.increment or 0),
+        ply_count=int(body.plyCount or 0),
+        white_rating_after=float(user.rating if me_white else (body.botElo or 0)),
+        black_rating_after=float((body.botElo or 0) if me_white else user.rating),
+        source="bot", ext_id="",
+    )
+    try:
+        db.add(g); db.commit(); db.refresh(g)
+    except Exception:
+        db.rollback()
+        return {"ok": False, "error": "저장에 실패했습니다."}
+    return {"ok": True, "gameId": g.id}
 
 
 @app.get("/api/insights/import/status")

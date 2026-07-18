@@ -30,7 +30,9 @@
 
     let d;
     try {
-      d = await API.insights(parseInt($("insRange").value, 10) || 0);
+      d = await API.insights(parseInt($("insRange").value, 10) || 0,
+                             $("insIncludeBots").checked,
+                             $("insTcFilter").value, $("insSrcFilter").value);
     } catch (e) {
       $("insSummary").textContent = e.message;
       return;
@@ -175,6 +177,51 @@
       kpi(t.openingsMastered, "📖 마스터한 오프닝");
 
     renderDetailed(d.detailed || { hasData: false });
+    renderTiming(d.timing || null);
+    renderGeography(d.geography || null);
+  }
+
+  /** 승/무/패 + 정확도를 한 줄로 보여주는 공용 렌더러 */
+  function rowsWithScore(el, rows, emptyMsg) {
+    if (!el) return;
+    if (!rows || !rows.length) { el.innerHTML = `<p class="muted">${esc(emptyMsg)}</p>`; return; }
+    el.innerHTML = rows.map((r) => `
+      <div class="ins-row">
+        <div class="ins-row-head">
+          <b>${esc(r.ko || r.code || "")}</b>
+          <span class="ins-score">${r.score}%
+            <small>(${r.games}판${r.reviewed ? ` · 정확도 ${r.accuracy}%` : ""})</small>
+          </span>
+        </div>
+        ${KiwiChart.wdl(r.win, r.draw, r.loss)}
+      </div>`).join("");
+  }
+
+  function renderTiming(t) {
+    if (!t) {
+      rowsWithScore($("insWeekday"), [], "데이터가 없습니다.");
+      rowsWithScore($("insHourBand"), [], "데이터가 없습니다.");
+      return;
+    }
+    rowsWithScore($("insWeekday"), t.weekday, "요일별 기록이 없습니다.");
+    rowsWithScore($("insHourBand"), t.hourBands, "시간대별 기록이 없습니다.");
+  }
+
+  function renderGeography(g) {
+    const note = $("insGeoNote");
+    if (!g || !g.countries || !g.countries.length) {
+      note.textContent = "상대 국가 정보가 없습니다. Chess.com 게임을 가져오면 " +
+        "상대의 국가별 성적을 볼 수 있습니다.";
+      $("insGeo").innerHTML = '<p class="muted">데이터가 없습니다.</p>';
+      return;
+    }
+    let msg = `${g.totalCountries}개국 · ${g.withCountry}판 기준.`;
+    if (g.best) msg += ` 가장 좋은 상대 국가: ${g.best.ko} (${g.best.score}%).`;
+    if (g.worst && g.worst.code !== (g.best && g.best.code)) {
+      msg += ` 가장 까다로운 국가: ${g.worst.ko} (${g.worst.score}%).`;
+    }
+    note.textContent = msg;
+    rowsWithScore($("insGeo"), g.countries, "데이터가 없습니다.");
   }
 
   // ==================== 세부 리뷰 지표 ====================
@@ -313,6 +360,9 @@
   $("ccUser").addEventListener("keydown", (e) => { if (e.key === "Enter") doImport(); });
 
   $("insRange").addEventListener("change", load);
+  $("insIncludeBots").addEventListener("change", load);
+  $("insTcFilter").addEventListener("change", load);
+  $("insSrcFilter").addEventListener("change", load);
   load();
   loadImportStatus();
 })();
